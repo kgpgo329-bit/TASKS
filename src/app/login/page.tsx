@@ -12,7 +12,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const { user, profile, isManager, signIn } = useAuth();
+  const { user, profile, isManager, signIn, signInAsDemo } = useAuth();
   const router = useRouter();
 
   // إذا كان المستخدم مسجل دخول بالفعل، نوجهه تلقائياً
@@ -152,8 +152,33 @@ export default function LoginPage() {
           </button>
         </form>
 
+        {/* أزرار المعاينة التجريبية السريعة */}
+        <div className="flex flex-col gap-2 pt-3 border-t border-surface-variant/40">
+          <span className="text-[11px] font-semibold text-outline text-center">
+            🚀 تجربة ومعاينة النظام فوراً (وضع العرض التوضيحي):
+          </span>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => signInAsDemo('manager')}
+              className="py-2.5 px-3 rounded-xl bg-primary-container text-on-primary text-xs font-bold hover:bg-secondary transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[16px]">shield_person</span>
+              <span>دخول كالمديرة</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => signInAsDemo('employee')}
+              className="py-2.5 px-3 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-bold hover:bg-emerald-200 transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[16px]">badge</span>
+              <span>دخول كالموظفة</span>
+            </button>
+          </div>
+        </div>
+
         {/* إشعار الأمان */}
-        <div className="pt-2 border-t border-surface-variant/30 text-center">
+        <div className="pt-1 text-center">
           <p className="text-[11px] text-outline flex items-center justify-center gap-1">
             <span className="material-symbols-outlined text-[15px] text-secondary">verified_user</span>
             <span>بوابة موحدة آمنة بنظام الصلاحيات RLS للموظفات والإدارة</span>

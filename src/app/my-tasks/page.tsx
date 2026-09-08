@@ -9,9 +9,10 @@ import { TaskModal } from '@/components/TaskModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase/client';
 import { Task, TaskStatus, TaskPriority } from '@/lib/supabase/types';
+import { INITIAL_DEMO_TASKS } from '@/lib/mockData';
 
 export default function MyTasksPage() {
-  const { user } = useAuth();
+  const { user, isDemoMode } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,6 +28,24 @@ export default function MyTasksPage() {
   const fetchMyTasks = async () => {
     if (!user) return;
     setLoading(true);
+
+    if (isDemoMode) {
+      try {
+        const saved = typeof window !== 'undefined' ? localStorage.getItem('mahamee_demo_tasks') : null;
+        const allTasks: Task[] = saved ? JSON.parse(saved) : INITIAL_DEMO_TASKS;
+        if (!saved && typeof window !== 'undefined') {
+          localStorage.setItem('mahamee_demo_tasks', JSON.stringify(INITIAL_DEMO_TASKS));
+        }
+        const myTasks = allTasks.filter((t) => t.user_id === user.id);
+        setTasks(myTasks);
+      } catch (e) {
+        console.error('Error loading demo tasks', e);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('tasks')
@@ -48,15 +67,22 @@ export default function MyTasksPage() {
 
   useEffect(() => {
     fetchMyTasks();
-  }, [user]);
+  }, [user, isDemoMode]);
 
   // تغيير حالة المهمة
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
     try {
-      // تحديث متفائل (Optimistic Update)
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
       );
+
+      if (isDemoMode) {
+        const saved = localStorage.getItem('mahamee_demo_tasks');
+        const all: Task[] = saved ? JSON.parse(saved) : INITIAL_DEMO_TASKS;
+        const updated = all.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t));
+        localStorage.setItem('mahamee_demo_tasks', JSON.stringify(updated));
+        return;
+      }
 
       const { error } = await supabase
         .from('tasks')
@@ -85,8 +111,44 @@ export default function MyTasksPage() {
   }) => {
     if (!user) return;
 
+    if (isDemoMode) {
+      const saved = localStorage.getItem('mahamee_demo_tasks');
+      const all: Task[] = saved ? JSON.parse(saved) : INITIAL_DEMO_TASKS;
+      if (editingTask) {
+        const updated = all.map((t) =>
+          t.id === editingTask.id
+            ? { ...t, ...taskData, updated_at: new Date().toISOString() }
+            : t
+        );
+        localStorage.setItem('mahamee_demo_tasks', JSON.stringify(updated));
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === editingTask.id
+              ? ({ ...t, ...taskData, updated_at: new Date().toISOString() } as Task)
+              : t
+          )
+        );
+      } else {
+        const newTask: Task = {
+          id: `task-${Date.now()}`,
+          title: taskData.title,
+          description: taskData.description,
+          status: taskData.status,
+          priority: taskData.priority,
+          due_date: taskData.due_date,
+          category: taskData.category,
+          user_id: user.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        const updated = [newTask, ...all];
+        localStorage.setItem('mahamee_demo_tasks', JSON.stringify(updated));
+        setTasks((prev) => [newTask, ...prev]);
+      }
+      return;
+    }
+
     if (editingTask) {
-      // تعديل
       const { data, error } = await supabase
         .from('tasks')
         .update({
@@ -104,7 +166,6 @@ export default function MyTasksPage() {
       if (error) throw error;
       setTasks((prev) => prev.map((t) => (t.id === editingTask.id ? (data as Task) : t)));
     } else {
-      // إضافة مهمة جديدة لنفسها
       const { data, error } = await supabase
         .from('tasks')
         .insert({
@@ -114,7 +175,7 @@ export default function MyTasksPage() {
           priority: taskData.priority,
           due_date: taskData.due_date,
           category: taskData.category,
-          user_id: user.id, // دائماً لحسابها الخاص
+          user_id: user.id,
         })
         .select()
         .single();
@@ -127,6 +188,17 @@ export default function MyTasksPage() {
   // حذف مهمة
   const confirmDeleteTask = async () => {
     if (!taskToDelete) return;
+
+    if (isDemoMode) {
+      const saved = localStorage.getItem('mahamee_demo_tasks');
+      const all: Task[] = saved ? JSON.parse(saved) : INITIAL_DEMO_TASKS;
+      const updated = all.filter((t) => t.id !== taskToDelete);
+      localStorage.setItem('mahamee_demo_tasks', JSON.stringify(updated));
+      setTasks((prev) => prev.filter((t) => t.id !== taskToDelete));
+      setTaskToDelete(null);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('tasks')

@@ -11,8 +11,10 @@ interface AuthContextType {
   role: UserRole | null;
   isManager: boolean;
   isEmployee: boolean;
+  isDemoMode: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  signInAsDemo: (role: UserRole) => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -53,6 +55,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('mahamee_demo_user');
+        if (saved) {
+          try {
+            const { user: u, profile: p } = JSON.parse(saved);
+            setUser(u);
+            setProfile(p);
+          } catch (e) {
+            console.error('Error parsing demo user', e);
+          }
+        }
+      }
       setLoading(false);
       return;
     }
@@ -150,15 +164,56 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const signInAsDemo = (role: UserRole) => {
+    const demoProfile: Profile =
+      role === 'manager'
+        ? {
+            id: 'demo-manager-id',
+            name: 'نهى العتيبي',
+            email: 'noha@mahamee.local',
+            role: 'manager',
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        : {
+            id: 'demo-employee-id',
+            name: 'سارة الشمري',
+            email: 'sara@mahamee.local',
+            role: 'employee',
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+
+    const demoUser = {
+      id: demoProfile.id,
+      email: demoProfile.email,
+      app_metadata: {},
+      user_metadata: { name: demoProfile.name, role: demoProfile.role },
+      aud: 'authenticated',
+      created_at: demoProfile.created_at,
+    } as unknown as User;
+
+    setUser(demoUser);
+    setProfile(demoProfile);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mahamee_demo_user', JSON.stringify({ user: demoUser, profile: demoProfile }));
+    }
+  };
+
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      if (isSupabaseConfigured()) {
+        await supabase.auth.signOut();
+      }
     } catch (err) {
       console.error('Sign out error:', err);
     } finally {
       setUser(null);
       setProfile(null);
       if (typeof window !== 'undefined') {
+        localStorage.removeItem('mahamee_demo_user');
         window.location.href = '/login';
       }
     }
@@ -166,6 +221,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isManager = profile?.role === 'manager';
   const isEmployee = profile?.role === 'employee';
+  const isDemoMode = !isSupabaseConfigured() || user?.id.startsWith('demo-') === true;
 
   return (
     <AuthContext.Provider
@@ -175,8 +231,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         role: profile?.role || null,
         isManager,
         isEmployee,
+        isDemoMode,
         loading,
         signIn,
+        signInAsDemo,
         signOut,
         refreshProfile,
       }}
