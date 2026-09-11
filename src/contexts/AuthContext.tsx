@@ -8,7 +8,7 @@ import {
   User,
 } from 'firebase/auth';
 import { auth, isFirebaseConfigured } from '@/lib/firebase/config';
-import { getProfile, setProfile as saveProfileToDb } from '@/lib/firebase/db';
+import { getProfile } from '@/lib/firebase/db';
 import { Profile, UserRole } from '@/lib/firebase/types';
 
 interface AuthContextType {
@@ -19,8 +19,7 @@ interface AuthContextType {
   isEmployee: boolean;
   isDemoMode: boolean;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signInAsDemo: (role: UserRole) => void;
+  signIn: (email: string, password: string) => Promise<{ error?: string; role?: UserRole }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -32,52 +31,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUserProfile = async (u: User): Promise<Profile | null> => {
+  // جلب مستند المستخدم من Firestore والتحقق من صلاحياته
+  const fetchUserProfile = async (uid: string): Promise<Profile | null> => {
     try {
-      let p = await getProfile(u.uid);
-      if (!p) {
-        // إذا كان المستخدم جديداً ومسجلاً للتو
-        const isManagerEmail =
-          u.email?.includes('admin') ||
-          u.email?.includes('manager') ||
-          u.email === 'manager@mahamee.local';
-
-        p = {
-          id: u.uid,
-          email: u.email || '',
-          name: u.displayName || u.email?.split('@')[0] || 'مستخدم',
-          role: isManagerEmail ? 'manager' : 'employee',
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        await saveProfileToDb(p);
-      }
-      return p;
+      const userProfile = await getProfile(uid);
+      return userProfile;
     } catch (err) {
-      console.error('Error fetching user profile:', err);
+      console.error('Error fetching user document from Firestore:', err);
       return null;
     }
   };
 
   const refreshProfile = async () => {
     if (!user) return;
-    const p = await fetchUserProfile(user);
-    if (p) setProfile(p);
+    const p = await fetchUserProfile(user.uid);
+    if (p) {
+      if (p.is_active === false || (p.role !== 'manager' && p.role !== 'employee')) {
+        await signOut();
+      } else {
+        setProfile(p);
+      }
+    }
   };
 
+  // مراقبة حالة جلسة Firebase Auth الحقيقية
   useEffect(() => {
+    // تنظيف أي بقايا تجريبية سابقة
     if (typeof window !== 'undefined') {
-      const savedDemo = localStorage.getItem('mahamee_demo_user');
-      if (savedDemo) {
-        try {
-          const { user: u, profile: p } = JSON.parse(savedDemo);
-          setUser(u);
-          setProfile(p);
-          setLoading(false);
-          return;
-        } catch (e) {}
-      }
+      localStorage.removeItem('mahamee_demo_user');
+      localStorage.removeItem('mahamee_demo_tasks');
+      localStorage.removeItem('mahamee_demo_employees');
     }
 
     if (!isFirebaseConfigured()) {
@@ -87,24 +70,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        setUser(firebaseUser);
-        const p = await fetchUserProfile(firebaseUser);
-        if (p) {
-          if (!p.is_active) {
+        try {
+          const userProfile = await fetchUserProfile(firebaseUser.uid);
+          // التحقق من وجود المستند وصلاحية الدور والتفعيل
+          if (
+            !userProfile ||
+            (userProfile.role !== 'manager' && userProfile.role !== 'employee') ||
+            userProfile.is_active === false
+          ) {
             await firebaseSignOut(auth);
             setUser(null);
             setProfile(null);
           } else {
-            setProfile(p);
+            setUser(firebaseUser);
+            setProfile(userProfile);
           }
-        }
-      } else {
-        // تحقق إن لم نكن في وضع التجربة
-        const savedDemo = typeof window !== 'undefined' ? localStorage.getItem('mahamee_demo_user') : null;
-        if (!savedDemo) {
+        } catch (e) {
+          console.error('Auth state verification error:', e);
           setUser(null);
           setProfile(null);
         }
+      } else {
+        setUser(null);
+        setProfile(null);
       }
       setLoading(false);
     });
@@ -112,84 +100,75 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
+  // تسجيل الدخول الحقيقي عبر البريد وكلمة المرور في Firebase Auth
+  const signIn = async (
+    email: string,
+    password: string
+  ): Promise<{ error?: string; role?: UserRole }> => {
     if (!isFirebaseConfigured()) {
       return { error: 'يرجى إعداد بيانات Firebase أولاً في ملف .env.local' };
     }
 
     try {
-      // مسح أي وضع تجريبي سابق
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('mahamee_demo_user');
-      }
-
+      // 1. تسجيل الدخول في Firebase Authentication
       const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      const p = await fetchUserProfile(credential.user);
+      const uid = credential.user.uid;
 
-      if (!p) {
-        return { error: 'تعذر تحميل بيانات المستخدم. يرجى مراجعة إدارة النظام' };
-      }
+      // 2. قراءة مستند المستخدم من Firestore: users/{uid}
+      const userProfile = await fetchUserProfile(uid);
 
-      if (!p.is_active) {
+      // 3. التحقق من وجود المستند في Firestore
+      if (!userProfile) {
         await firebaseSignOut(auth);
         setUser(null);
         setProfile(null);
-        return { error: 'تم تعطيل هذا الحساب من قبل الإدارة. يرجى مراجعة المديرة' };
+        return {
+          error: 'لم يتم العثور على بيانات الحساب في قاعدة البيانات (users). يرجى مراجعة إدارة النظام لتهيئة حسابك.',
+        };
       }
 
+      // 4. التحقق من الدور الوظيفي (manager أو employee)
+      if (userProfile.role !== 'manager' && userProfile.role !== 'employee') {
+        await firebaseSignOut(auth);
+        setUser(null);
+        setProfile(null);
+        return {
+          error: 'ليس لديكِ دور وظيفي صالح (مديرة أو موظفة) للوصول إلى النظام. يرجى التواصل مع الإدارة.',
+        };
+      }
+
+      // 5. التحقق من حالة تفعيل الحساب
+      if (userProfile.is_active === false) {
+        await firebaseSignOut(auth);
+        setUser(null);
+        setProfile(null);
+        return {
+          error: 'تم تعطيل هذا الحساب من قبل الإدارة. يرجى مراجعة المديرة.',
+        };
+      }
+
+      // نجاح تسجيل الدخول واعتماد الصلاحيات
       setUser(credential.user);
-      setProfile(p);
-      return {};
+      setProfile(userProfile);
+      return { role: userProfile.role };
     } catch (err: any) {
+      console.error('Firebase sign in error:', err);
       if (
         err.code === 'auth/invalid-credential' ||
         err.code === 'auth/user-not-found' ||
-        err.code === 'auth/wrong-password'
+        err.code === 'auth/wrong-password' ||
+        err.code === 'auth/invalid-email'
       ) {
         return { error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
       }
       if (err.code === 'auth/too-many-requests') {
-        return { error: 'تم إدخال كلمة المرور بشكل خاطئ عدة مرات. يرجى الانتظار قليلاً' };
+        return { error: 'تم إدخال كلمة المرور بشكل خاطئ عدة مرات. يرجى الانتظار قليلاً ثم المحاولة ثانية' };
       }
-      return { error: err.message || 'حدث خطأ أثناء تسجيل الدخول' };
+      return { error: err.message || 'حدث خطأ أثناء تسجيل الدخول. يرجى التحقق من اتصالك والمحاولة مجدداً' };
     }
   };
 
-  const signInAsDemo = (role: UserRole) => {
-    const demoProfile: Profile =
-      role === 'manager'
-        ? {
-            id: 'demo-manager-id',
-            name: 'نهى العتيبي',
-            email: 'noha@mahamee.local',
-            role: 'manager',
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }
-        : {
-            id: 'demo-employee-id',
-            name: 'سارة الشمري',
-            email: 'sara@mahamee.local',
-            role: 'employee',
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-
-    const demoUser = {
-      uid: demoProfile.id,
-      email: demoProfile.email,
-      displayName: demoProfile.name,
-    } as unknown as User;
-
-    setUser(demoUser);
-    setProfile(demoProfile);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('mahamee_demo_user', JSON.stringify({ user: demoUser, profile: demoProfile }));
-    }
-  };
-
+  // تسجيل الخروج الحقيقي
   const signOut = async () => {
     try {
       if (auth.currentUser) {
@@ -202,6 +181,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setProfile(null);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('mahamee_demo_user');
+        localStorage.removeItem('mahamee_demo_tasks');
+        localStorage.removeItem('mahamee_demo_employees');
         window.location.href = '/login';
       }
     }
@@ -209,10 +190,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isManager = profile?.role === 'manager';
   const isEmployee = profile?.role === 'employee';
-  const isDemoMode =
-    !isFirebaseConfigured() ||
-    user?.uid.startsWith('demo-') === true ||
-    (typeof window !== 'undefined' && Boolean(localStorage.getItem('mahamee_demo_user')));
 
   return (
     <AuthContext.Provider
@@ -222,10 +199,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         role: profile?.role || null,
         isManager,
         isEmployee,
-        isDemoMode,
+        isDemoMode: false,
         loading,
         signIn,
-        signInAsDemo,
         signOut,
         refreshProfile,
       }}

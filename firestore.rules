@@ -2,22 +2,35 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // دالة مساعدة للتحقق مما إذا كان المستخدم مديراً نشطاً
-    function isManager() {
-      return request.auth != null && 
-        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'manager' &&
-        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.is_active == true;
+    // دالة مساعدة للتحقق من دور المستخدم من مجموعة users أو profiles
+    function getUserRole() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : (exists(/databases/$(database)/documents/profiles/$(request.auth.uid))
+            ? get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role
+            : 'none');
     }
 
-    // قواعد حماية الملفات الشخصية (profiles)
-    match /profiles/{userId} {
-      // الموظفة تقرأ وتعدل ملفها الشخصي، والمديرة تصل لجميع الموظفات
+    // دالة مساعدة للتحقق مما إذا كان المستخدم مديراً
+    function isManager() {
+      return request.auth != null && getUserRole() == 'manager';
+    }
+
+    // قواعد حماية مجموعة المستخدمين (users/{userId})
+    match /users/{userId} {
       allow read: if request.auth != null && (request.auth.uid == userId || isManager());
       allow create, update: if request.auth != null && (request.auth.uid == userId || isManager());
       allow delete: if isManager();
     }
 
-    // قواعد حماية المهام (tasks)
+    // قواعد حماية الملفات الشخصية (profiles/{userId})
+    match /profiles/{userId} {
+      allow read: if request.auth != null && (request.auth.uid == userId || isManager());
+      allow create, update: if request.auth != null && (request.auth.uid == userId || isManager());
+      allow delete: if isManager();
+    }
+
+    // قواعد حماية المهام (tasks/{taskId})
     match /tasks/{taskId} {
       // الموظفة تقرأ وتعدل وتحذف مهامها الخاصة فقط
       // المديرة تقرأ وتعدل وتتحكم في جميع المهام

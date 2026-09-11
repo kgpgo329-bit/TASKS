@@ -12,19 +12,19 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const { user, profile, isManager, signIn, signInAsDemo } = useAuth();
+  const { user, profile, isManager, signIn } = useAuth();
   const router = useRouter();
 
-  // إذا كان المستخدم مسجل دخول بالفعل، نوجهه تلقائياً
+  // إذا كان المستخدم مسجل دخول بالفعل، نوجهه تلقائياً بناءً على دوره
   useEffect(() => {
     if (user && profile) {
-      if (isManager) {
+      if (profile.role === 'manager') {
         router.replace('/dashboard');
-      } else {
+      } else if (profile.role === 'employee') {
         router.replace('/my-tasks');
       }
     }
-  }, [user, profile, isManager, router]);
+  }, [user, profile, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +39,16 @@ export default function LoginPage() {
     const res = await signIn(email, password);
     if (res.error) {
       setErrorMessage(res.error);
+      setLoading(false);
+      return;
+    }
+
+    if (res.role === 'manager') {
+      router.replace('/dashboard');
+    } else if (res.role === 'employee') {
+      router.replace('/my-tasks');
+    } else {
+      setErrorMessage('ليس لديكِ دور وظيفي معتمد للوصول إلى النظام');
       setLoading(false);
     }
   };
@@ -151,31 +161,6 @@ export default function LoginPage() {
             )}
           </button>
         </form>
-
-        {/* أزرار المعاينة التجريبية السريعة */}
-        <div className="flex flex-col gap-2 pt-3 border-t border-surface-variant/40">
-          <span className="text-[11px] font-semibold text-outline text-center">
-            🚀 تجربة ومعاينة النظام فوراً (وضع العرض التوضيحي):
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => signInAsDemo('manager')}
-              className="py-2.5 px-3 rounded-xl bg-primary-container text-on-primary text-xs font-bold hover:bg-secondary transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
-            >
-              <span className="material-symbols-outlined text-[16px]">shield_person</span>
-              <span>دخول كالمديرة</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => signInAsDemo('employee')}
-              className="py-2.5 px-3 rounded-xl bg-secondary-container text-on-secondary-container text-xs font-bold hover:bg-emerald-200 transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
-            >
-              <span className="material-symbols-outlined text-[16px]">badge</span>
-              <span>دخول كالموظفة</span>
-            </button>
-          </div>
-        </div>
 
         {/* إشعار الأمان */}
         <div className="pt-1 text-center">

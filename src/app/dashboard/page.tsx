@@ -10,10 +10,8 @@ import { TaskModal } from '@/components/TaskModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllTasks, getAllProfiles, updateTask, deleteTask, createTask } from '@/lib/firebase/db';
 import { Task, TaskStatus, Profile } from '@/lib/firebase/types';
-import { INITIAL_DEMO_TASKS, INITIAL_DEMO_EMPLOYEES } from '@/lib/mockData';
-
 export default function DashboardPage() {
-  const { profile, isDemoMode } = useAuth();
+  const { profile } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,36 +21,6 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     setLoading(true);
-
-    if (isDemoMode) {
-      try {
-        const savedTasks = typeof window !== 'undefined' ? localStorage.getItem('mahamee_demo_tasks') : null;
-        const allTasks: Task[] = savedTasks ? JSON.parse(savedTasks) : INITIAL_DEMO_TASKS;
-        if (!savedTasks && typeof window !== 'undefined') {
-          localStorage.setItem('mahamee_demo_tasks', JSON.stringify(INITIAL_DEMO_TASKS));
-        }
-
-        const savedEmps = typeof window !== 'undefined' ? localStorage.getItem('mahamee_demo_employees') : null;
-        const allEmps: Profile[] = savedEmps ? JSON.parse(savedEmps) : INITIAL_DEMO_EMPLOYEES;
-        if (!savedEmps && typeof window !== 'undefined') {
-          localStorage.setItem('mahamee_demo_employees', JSON.stringify(INITIAL_DEMO_EMPLOYEES));
-        }
-
-        // إرفاق بيانات الموظفة بكل مهمة
-        const tasksWithProfiles = allTasks.map((t) => ({
-          ...t,
-          profiles: allEmps.find((e) => e.id === t.user_id) || t.profiles,
-        }));
-
-        setTasks(tasksWithProfiles);
-        setEmployees(allEmps);
-      } catch (e) {
-        console.error('Error loading demo dashboard', e);
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
 
     try {
       const [tasksData, profilesData] = await Promise.all([getAllTasks(), getAllProfiles()]);
@@ -72,22 +40,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [isDemoMode]);
+  }, []);
 
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
     try {
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
       );
-
-      if (isDemoMode) {
-        const saved = localStorage.getItem('mahamee_demo_tasks');
-        const all: Task[] = saved ? JSON.parse(saved) : INITIAL_DEMO_TASKS;
-        const updated = all.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t));
-        localStorage.setItem('mahamee_demo_tasks', JSON.stringify(updated));
-        fetchDashboardData();
-        return;
-      }
 
       await updateTask(taskId, { status: newStatus });
       fetchDashboardData();
@@ -249,14 +208,6 @@ export default function DashboardPage() {
                         setIsTaskModalOpen(true);
                       }}
                       onDelete={async (taskId) => {
-                        if (isDemoMode) {
-                          const saved = localStorage.getItem('mahamee_demo_tasks');
-                          const all: Task[] = saved ? JSON.parse(saved) : INITIAL_DEMO_TASKS;
-                          const updated = all.filter((t) => t.id !== taskId);
-                          localStorage.setItem('mahamee_demo_tasks', JSON.stringify(updated));
-                          fetchDashboardData();
-                          return;
-                        }
                         await deleteTask(taskId);
                         fetchDashboardData();
                       }}
@@ -328,35 +279,6 @@ export default function DashboardPage() {
           isOpen={isTaskModalOpen}
           onClose={() => setIsTaskModalOpen(false)}
           onSave={async (taskData) => {
-            if (isDemoMode) {
-              const saved = localStorage.getItem('mahamee_demo_tasks');
-              const all: Task[] = saved ? JSON.parse(saved) : INITIAL_DEMO_TASKS;
-              if (selectedTask) {
-                const updated = all.map((t) =>
-                  t.id === selectedTask.id
-                    ? { ...t, ...taskData, updated_at: new Date().toISOString() }
-                    : t
-                );
-                localStorage.setItem('mahamee_demo_tasks', JSON.stringify(updated));
-              } else {
-                const newTask: Task = {
-                  id: `task-${Date.now()}`,
-                  title: taskData.title,
-                  description: taskData.description,
-                  status: taskData.status,
-                  priority: taskData.priority,
-                  due_date: taskData.due_date,
-                  category: taskData.category,
-                  user_id: taskData.user_id || profile?.id || 'demo-manager-id',
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                };
-                localStorage.setItem('mahamee_demo_tasks', JSON.stringify([newTask, ...all]));
-              }
-              fetchDashboardData();
-              return;
-            }
-
             if (selectedTask) {
               await updateTask(selectedTask.id, {
                 title: taskData.title,

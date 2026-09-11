@@ -9,8 +9,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getAllProfiles, getAllTasks, updateProfile, deleteProfile, setProfile } from '@/lib/firebase/db';
 import { createEmployeeAuthAccount } from '@/lib/firebase/config';
 import { Profile, UserRole, Task } from '@/lib/firebase/types';
-import { INITIAL_DEMO_EMPLOYEES, INITIAL_DEMO_TASKS } from '@/lib/mockData';
-
 interface EmployeeWithStats extends Profile {
   total_tasks?: number;
   completed_tasks?: number;
@@ -18,7 +16,7 @@ interface EmployeeWithStats extends Profile {
 }
 
 export default function EmployeesPage() {
-  const { user, isDemoMode } = useAuth();
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<EmployeeWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,36 +30,6 @@ export default function EmployeesPage() {
   const fetchEmployees = async () => {
     setLoading(true);
     setActionError('');
-
-    if (isDemoMode) {
-      try {
-        const savedEmps = typeof window !== 'undefined' ? localStorage.getItem('mahamee_demo_employees') : null;
-        const allEmps: Profile[] = savedEmps ? JSON.parse(savedEmps) : INITIAL_DEMO_EMPLOYEES;
-        if (!savedEmps && typeof window !== 'undefined') {
-          localStorage.setItem('mahamee_demo_employees', JSON.stringify(INITIAL_DEMO_EMPLOYEES));
-        }
-
-        const savedTasks = typeof window !== 'undefined' ? localStorage.getItem('mahamee_demo_tasks') : null;
-        const allTasks: Task[] = savedTasks ? JSON.parse(savedTasks) : INITIAL_DEMO_TASKS;
-
-        const empsWithStats: EmployeeWithStats[] = allEmps.map((emp) => {
-          const empTasks = allTasks.filter((t) => t.user_id === emp.id);
-          return {
-            ...emp,
-            total_tasks: empTasks.length,
-            completed_tasks: empTasks.filter((t) => t.status === 'completed').length,
-            in_progress_tasks: empTasks.filter((t) => t.status === 'in_progress').length,
-          };
-        });
-
-        setEmployees(empsWithStats);
-      } catch (e) {
-        console.error('Error loading demo employees', e);
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
 
     try {
       const [profilesData, tasksData] = await Promise.all([getAllProfiles(), getAllTasks()]);
@@ -86,7 +54,7 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     fetchEmployees();
-  }, [isDemoMode]);
+  }, []);
 
   // حفظ موظفة جديدة أو تعديل موظفة سابقة
   const handleSaveEmployee = async (employeeData: {
@@ -99,34 +67,6 @@ export default function EmployeesPage() {
   }) => {
     setActionError('');
     setActionSuccess('');
-
-    if (isDemoMode) {
-      const saved = localStorage.getItem('mahamee_demo_employees');
-      const all: Profile[] = saved ? JSON.parse(saved) : INITIAL_DEMO_EMPLOYEES;
-      if (employeeData.id) {
-        const updated = all.map((e) =>
-          e.id === employeeData.id
-            ? { ...e, name: employeeData.name, role: employeeData.role, is_active: employeeData.is_active }
-            : e
-        );
-        localStorage.setItem('mahamee_demo_employees', JSON.stringify(updated));
-        setActionSuccess('تم تحديث بيانات الموظفة بنجاح');
-      } else {
-        const newEmp: Profile = {
-          id: `demo-emp-${Date.now()}`,
-          name: employeeData.name,
-          email: employeeData.email || 'employee@mahamee.local',
-          role: employeeData.role,
-          is_active: employeeData.is_active,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        localStorage.setItem('mahamee_demo_employees', JSON.stringify([...all, newEmp]));
-        setActionSuccess('تم إنشاء حساب الموظفة بنجاح ويمكنها الآن الدخول ببياناتها');
-      }
-      fetchEmployees();
-      return;
-    }
 
     try {
       const isEdit = Boolean(employeeData.id);
@@ -169,22 +109,6 @@ export default function EmployeesPage() {
     setActionError('');
     setActionSuccess('');
 
-    if (isDemoMode) {
-      const saved = localStorage.getItem('mahamee_demo_employees');
-      const all: Profile[] = saved ? JSON.parse(saved) : INITIAL_DEMO_EMPLOYEES;
-      const updated = all.map((e) =>
-        e.id === employee.id ? { ...e, is_active: !e.is_active } : e
-      );
-      localStorage.setItem('mahamee_demo_employees', JSON.stringify(updated));
-      setActionSuccess(
-        !employee.is_active
-          ? `تم تفعيل حساب الموظفة (${employee.name}) بنجاح`
-          : `تم تعطيل حساب الموظفة (${employee.name}) ومنعها من الدخول`
-      );
-      fetchEmployees();
-      return;
-    }
-
     try {
       await updateProfile(employee.id, {
         is_active: !employee.is_active,
@@ -206,17 +130,6 @@ export default function EmployeesPage() {
     if (!employeeToDelete) return;
     setActionError('');
     setActionSuccess('');
-
-    if (isDemoMode) {
-      const saved = localStorage.getItem('mahamee_demo_employees');
-      const all: Profile[] = saved ? JSON.parse(saved) : INITIAL_DEMO_EMPLOYEES;
-      const updated = all.filter((e) => e.id !== employeeToDelete.id);
-      localStorage.setItem('mahamee_demo_employees', JSON.stringify(updated));
-      setActionSuccess(`تم حذف حساب الموظفة (${employeeToDelete.name}) بنجاح`);
-      setEmployeeToDelete(null);
-      fetchEmployees();
-      return;
-    }
 
     try {
       await deleteProfile(employeeToDelete.id);

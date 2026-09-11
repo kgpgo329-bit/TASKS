@@ -9,10 +9,8 @@ import { TaskModal } from '@/components/TaskModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserTasks, createTask, updateTask, deleteTask } from '@/lib/firebase/db';
 import { Task, TaskStatus, TaskPriority } from '@/lib/firebase/types';
-import { INITIAL_DEMO_TASKS } from '@/lib/mockData';
-
 export default function MyTasksPage() {
-  const { user, isDemoMode } = useAuth();
+  const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,27 +24,10 @@ export default function MyTasksPage() {
 
   const currentUserId = user?.uid || (user as any)?.id;
 
-  // جلب مهام المستخدم الحالي فقط
+  // جلب مهام المستخدم الحالي فقط من Firestore
   const fetchMyTasks = async () => {
     if (!currentUserId) return;
     setLoading(true);
-
-    if (isDemoMode) {
-      try {
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('mahamee_demo_tasks') : null;
-        const allTasks: Task[] = saved ? JSON.parse(saved) : INITIAL_DEMO_TASKS;
-        if (!saved && typeof window !== 'undefined') {
-          localStorage.setItem('mahamee_demo_tasks', JSON.stringify(INITIAL_DEMO_TASKS));
-        }
-        const myTasks = allTasks.filter((t) => t.user_id === currentUserId);
-        setTasks(myTasks);
-      } catch (e) {
-        console.error('Error loading demo tasks', e);
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
 
     try {
       const myTasks = await getUserTasks(currentUserId);
@@ -60,7 +41,7 @@ export default function MyTasksPage() {
 
   useEffect(() => {
     fetchMyTasks();
-  }, [user, isDemoMode]);
+  }, [user]);
 
   // تغيير حالة المهمة
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
@@ -68,14 +49,6 @@ export default function MyTasksPage() {
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
       );
-
-      if (isDemoMode) {
-        const saved = localStorage.getItem('mahamee_demo_tasks');
-        const all: Task[] = saved ? JSON.parse(saved) : INITIAL_DEMO_TASKS;
-        const updated = all.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t));
-        localStorage.setItem('mahamee_demo_tasks', JSON.stringify(updated));
-        return;
-      }
 
       await updateTask(taskId, { status: newStatus });
     } catch (err) {
@@ -95,43 +68,6 @@ export default function MyTasksPage() {
     user_id?: string;
   }) => {
     if (!user) return;
-
-    if (isDemoMode) {
-      const saved = localStorage.getItem('mahamee_demo_tasks');
-      const all: Task[] = saved ? JSON.parse(saved) : INITIAL_DEMO_TASKS;
-      if (editingTask) {
-        const updated = all.map((t) =>
-          t.id === editingTask.id
-            ? { ...t, ...taskData, updated_at: new Date().toISOString() }
-            : t
-        );
-        localStorage.setItem('mahamee_demo_tasks', JSON.stringify(updated));
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === editingTask.id
-              ? ({ ...t, ...taskData, updated_at: new Date().toISOString() } as Task)
-              : t
-          )
-        );
-      } else {
-        const newTask: Task = {
-          id: `task-${Date.now()}`,
-          title: taskData.title,
-          description: taskData.description,
-          status: taskData.status,
-          priority: taskData.priority,
-          due_date: taskData.due_date,
-          category: taskData.category,
-          user_id: currentUserId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        const updated = [newTask, ...all];
-        localStorage.setItem('mahamee_demo_tasks', JSON.stringify(updated));
-        setTasks((prev) => [newTask, ...prev]);
-      }
-      return;
-    }
 
     if (editingTask) {
       await updateTask(editingTask.id, {
@@ -166,16 +102,6 @@ export default function MyTasksPage() {
   // حذف مهمة
   const confirmDeleteTask = async () => {
     if (!taskToDelete) return;
-
-    if (isDemoMode) {
-      const saved = localStorage.getItem('mahamee_demo_tasks');
-      const all: Task[] = saved ? JSON.parse(saved) : INITIAL_DEMO_TASKS;
-      const updated = all.filter((t) => t.id !== taskToDelete);
-      localStorage.setItem('mahamee_demo_tasks', JSON.stringify(updated));
-      setTasks((prev) => prev.filter((t) => t.id !== taskToDelete));
-      setTaskToDelete(null);
-      return;
-    }
 
     try {
       await deleteTask(taskToDelete);
