@@ -55,7 +55,7 @@ export default function LoginPage() {
           <div className="flex flex-col">
             <h1 className="text-2xl font-bold text-primary">منصة مهامي</h1>
             <p className="text-xs text-on-surface-variant mt-0.5">
-              جمعية إرشاد الجاليات - بوابة المتابعة والإنجاز
+              جمعية هاد - بوابة المتابعة والإنجاز
             </p>
           </div>
         </div>

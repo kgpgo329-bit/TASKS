@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 import { AuthProvider } from '@/contexts/AuthContext';
 
 export const metadata: Metadata = {
-  title: 'مهامي - جمعية إرشاد الجاليات | وقار وإنجاز',
-  description: 'نظام إدارة ومتابعة المهام التشغيلية والدعوية لجمعية إرشاد الجاليات',
+  title: 'مهامي - جمعية هاد | وقار وإنجاز',
+  description: 'نظام إدارة ومتابعة المهام التشغيلية والدعوية لجمعية هاد',
   icons: {
     icon: '/logo.svg',
   },

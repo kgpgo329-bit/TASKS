@@ -32,7 +32,7 @@ export const Logo: React.FC<LogoProps> = ({ size = 40, className = '', showText 
             مهامي
           </span>
           <span className="font-label-sm text-label-sm text-on-surface-variant font-medium text-xs">
-            جمعية إرشاد الجاليات
+            جمعية هاد
           </span>
         </div>
       )}
