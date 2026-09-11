@@ -7,6 +7,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { TaskCard } from '@/components/TaskCard';
 import { TaskModal } from '@/components/TaskModal';
+import { AddEmployeeModal } from '@/components/AddEmployeeModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllTasks, getAllProfiles, updateTask, deleteTask, createTask } from '@/lib/firebase/db';
 import { Task, TaskStatus, Profile } from '@/lib/firebase/types';
@@ -17,6 +18,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const fetchDashboardData = async () => {
@@ -80,6 +82,7 @@ export default function DashboardPage() {
             setSelectedTask(null);
             setIsTaskModalOpen(true);
           }}
+          onOpenAddEmployeeModal={() => setIsAddEmployeeModalOpen(true)}
           title="لوحة المتابعة الإدارية"
         />
 
@@ -99,6 +102,29 @@ export default function DashboardPage() {
                   <span className="material-symbols-outlined text-[16px] text-tertiary-fixed">format_quote</span>
                   <span>نظمي مهام فريق العمل وتابعي الإنجازات اليومية لدعم رسالة الجمعية</span>
                 </p>
+
+                {/* أزرار الإجراء السريع في البانر */}
+                <div className="flex flex-wrap items-center gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddEmployeeModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-secondary text-white hover:bg-secondary/90 rounded-xl text-xs font-bold shadow-sm transition-all transform active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">person_add</span>
+                    <span>إضافة موظف جديد</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedTask(null);
+                      setIsTaskModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold backdrop-blur-sm border border-white/20 transition-all transform active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">add</span>
+                    <span>مهمة جديدة</span>
+                  </button>
+                </div>
               </div>
 
               {/* بطاقة النسبة المئوية */}
@@ -264,12 +290,24 @@ export default function DashboardPage() {
                   })}
                 </div>
 
-                <Link
-                  href="/employees"
-                  className="w-full py-2 bg-primary/10 hover:bg-primary text-primary hover:text-white rounded-xl text-xs font-bold text-center transition-all"
-                >
-                  + إدارة وإضافة الموظفات
-                </Link>
+                <div className="flex flex-col gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddEmployeeModalOpen(true)}
+                    className="w-full py-2.5 bg-primary hover:bg-secondary text-white rounded-xl text-xs font-bold text-center transition-all flex items-center justify-center gap-2 shadow-sm transform active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">person_add</span>
+                    <span>إضافة موظف جديد</span>
+                  </button>
+
+                  <Link
+                    href="/employees"
+                    className="w-full py-2 bg-surface-container-low hover:bg-surface-container text-primary rounded-xl text-xs font-semibold text-center transition-all flex items-center justify-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">group</span>
+                    <span>إدارة جميع الموظفات</span>
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
@@ -305,6 +343,15 @@ export default function DashboardPage() {
           initialTask={selectedTask}
           employeesList={employees}
           isManager={true}
+        />
+
+        {/* نافذة إضافة موظف جديد الحقيقية */}
+        <AddEmployeeModal
+          isOpen={isAddEmployeeModalOpen}
+          onClose={() => setIsAddEmployeeModalOpen(false)}
+          onEmployeeCreated={() => {
+            fetchDashboardData();
+          }}
         />
       </div>
     </AuthGuard>

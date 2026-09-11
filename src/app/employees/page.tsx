@@ -7,7 +7,6 @@ import { Header } from '@/components/Header';
 import { EmployeeModal } from '@/components/EmployeeModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllProfiles, getAllTasks, updateProfile, deleteProfile, setProfile } from '@/lib/firebase/db';
-import { createEmployeeAuthAccount } from '@/lib/firebase/config';
 import { Profile, UserRole, Task } from '@/lib/firebase/types';
 interface EmployeeWithStats extends Profile {
   total_tasks?: number;
@@ -82,18 +81,27 @@ export default function EmployeesPage() {
         if (!employeeData.email || !employeeData.password) {
           throw new Error('البريد الإلكتروني وكلمة المرور مطلوبة لإنشاء الموظفة');
         }
-        const newUid = await createEmployeeAuthAccount(employeeData.email, employeeData.password);
-        const now = new Date().toISOString();
-        await setProfile({
-          id: newUid,
-          name: employeeData.name,
-          email: employeeData.email,
-          role: employeeData.role,
-          is_active: employeeData.is_active,
-          created_at: now,
-          updated_at: now,
+        const idToken = await user?.getIdToken(true);
+        if (!idToken) {
+          throw new Error('جلسة تسجيل الدخول غير متوفرة، يرجى إعادة تسجيل الدخول');
+        }
+        const res = await fetch('/api/admin/create-employee', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            name: employeeData.name,
+            email: employeeData.email,
+            password: employeeData.password,
+          }),
         });
-        setActionSuccess('تم إضافة الموظفة وإنشاء الحساب بنجاح');
+        const resData = await res.json();
+        if (!res.ok) {
+          throw new Error(resData.error || 'فشل إضافة الموظفة');
+        }
+        setActionSuccess('تم إضافة الموظفة وإنشاء حسابها في النظام بنجاح');
       }
 
       fetchEmployees();

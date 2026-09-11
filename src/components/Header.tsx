@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 interface HeaderProps {
   onOpenMobileMenu?: () => void;
   onOpenNewTaskModal?: () => void;
+  onOpenAddEmployeeModal?: () => void;
   searchQuery?: string;
   onSearchChange?: (val: string) => void;
   title?: string;
@@ -14,6 +15,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   onOpenMobileMenu,
   onOpenNewTaskModal,
+  onOpenAddEmployeeModal,
   searchQuery = '',
   onSearchChange,
   title,
@@ -67,6 +69,19 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="material-symbols-outlined text-[18px] text-secondary">calendar_today</span>
           <span>{todayDate}</span>
         </div>
+
+        {/* زر إضافة موظف جديد للمديرة */}
+        {onOpenAddEmployeeModal && isManager && (
+          <button
+            type="button"
+            onClick={onOpenAddEmployeeModal}
+            className="inline-flex items-center gap-space-xs px-3.5 lg:px-space-md py-2 bg-secondary text-white rounded-xl text-sm font-semibold shadow-sm hover:bg-secondary/90 transition-all transform active:scale-95"
+            title="إضافة موظف جديد"
+          >
+            <span className="material-symbols-outlined text-[20px]">person_add</span>
+            <span className="hidden sm:inline">إضافة موظف</span>
+          </button>
+        )}
 
         {/* زر إضافة مهمة جديدة */}
         {onOpenNewTaskModal && (
