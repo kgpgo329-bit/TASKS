@@ -109,41 +109,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { error: 'يرجى إعداد بيانات Firebase أولاً في ملف .env.local' };
     }
 
+    console.log('[Auth] Starting signIn for email:', email.trim(), {
+      projectId: auth.app.options.projectId,
+      authDomain: auth.app.options.authDomain,
+    });
+
     try {
       // 1. تسجيل الدخول في Firebase Authentication
+      console.log('[Auth] Calling signInWithEmailAndPassword...');
       const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const uid = credential.user.uid;
+      console.log('[Auth] Firebase Auth SUCCESS! Logged in UID:', uid);
 
       // 2. قراءة مستند المستخدم من Firestore: users/{uid}
+      console.log('[Auth] Fetching user document from Firestore (users/' + uid + ')...');
       const userProfile = await fetchUserProfile(uid);
+      console.log('[Auth] Firestore userProfile result:', userProfile);
 
       // 3. التحقق من وجود المستند في Firestore
       if (!userProfile) {
+        console.error('[Auth] Firestore document not found for UID:', uid);
         await firebaseSignOut(auth);
         setUser(null);
         setProfile(null);
         return {
-          error: 'لم يتم العثور على بيانات الحساب في قاعدة البيانات (users). يرجى مراجعة إدارة النظام لتهيئة حسابك.',
+          error: `[firestore/user-not-found] نجحت المصادقة في Firebase Auth (UID: ${uid})، ولكن لم يُعثر على مستند المستخدم في Firestore تحت: users/${uid}. يرجى إضافة المستند وتحديد الدور (role).`,
         };
       }
 
       // 4. التحقق من الدور الوظيفي (manager أو employee)
       if (userProfile.role !== 'manager' && userProfile.role !== 'employee') {
+        console.error('[Auth] Invalid role:', userProfile.role);
         await firebaseSignOut(auth);
         setUser(null);
         setProfile(null);
         return {
-          error: 'ليس لديكِ دور وظيفي صالح (مديرة أو موظفة) للوصول إلى النظام. يرجى التواصل مع الإدارة.',
+          error: `[firestore/invalid-role] الدور الوظيفي غير صالح (role: "${userProfile.role || ''}"). يجب أن يكون manager أو employee في users/${uid}.`,
         };
       }
 
       // 5. التحقق من حالة تفعيل الحساب
       if (userProfile.is_active === false) {
+        console.error('[Auth] Account is disabled');
         await firebaseSignOut(auth);
         setUser(null);
         setProfile(null);
         return {
-          error: 'تم تعطيل هذا الحساب من قبل الإدارة. يرجى مراجعة المديرة.',
+          error: `[firestore/account-disabled] تم تعطيل هذا الحساب من قبل الإدارة (is_active: false) في users/${uid}.`,
         };
       }
 
@@ -152,19 +164,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setProfile(userProfile);
       return { role: userProfile.role };
     } catch (err: any) {
-      console.error('Firebase sign in error:', err);
-      if (
-        err.code === 'auth/invalid-credential' ||
-        err.code === 'auth/user-not-found' ||
-        err.code === 'auth/wrong-password' ||
-        err.code === 'auth/invalid-email'
-      ) {
-        return { error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
-      }
-      if (err.code === 'auth/too-many-requests') {
-        return { error: 'تم إدخال كلمة المرور بشكل خاطئ عدة مرات. يرجى الانتظار قليلاً ثم المحاولة ثانية' };
-      }
-      return { error: err.message || 'حدث خطأ أثناء تسجيل الدخول. يرجى التحقق من اتصالك والمحاولة مجدداً' };
+      console.error('[Firebase Auth Error Code]:', err?.code);
+      console.error('[Firebase Auth Error Message]:', err?.message);
+      console.error('[Firebase Auth Full Error]:', err);
+
+      const code = err?.code || 'auth/unknown-error';
+      const msg = err?.message || 'حدث خطأ غير متوقع أثناء تسجيل الدخول';
+
+      return {
+        error: `[${code}]: ${msg}`,
+      };
     }
   };
 

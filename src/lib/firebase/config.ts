@@ -20,6 +20,14 @@ export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfi
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
+if (typeof window !== 'undefined') {
+  console.log('[Firebase Initialization]', {
+    projectId: firebaseConfig.projectId,
+    authDomain: firebaseConfig.authDomain,
+    apiKeyPrefix: firebaseConfig.apiKey.substring(0, 10) + '...',
+  });
+}
+
 // دالة مساعدة لإنشاء حساب موظفة جديدة في Firebase Auth بدون تسجيل خروج المديرة الحالية
 export async function createEmployeeAuthAccount(email: string, pass: string): Promise<string> {
   const secondaryAppName = `secondary-auth-${Date.now()}`;
