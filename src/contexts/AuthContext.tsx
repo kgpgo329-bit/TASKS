@@ -1,9 +1,15 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
-import { Profile, UserRole } from '@/lib/supabase/types';
-import { User } from '@supabase/supabase-js';
+import {
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  User,
+} from 'firebase/auth';
+import { auth, isFirebaseConfigured } from '@/lib/firebase/config';
+import { getProfile, setProfile as saveProfileToDb } from '@/lib/firebase/db';
+import { Profile, UserRole } from '@/lib/firebase/types';
 
 interface AuthContextType {
   user: User | null;
@@ -26,85 +32,66 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string): Promise<Profile | null> => {
+  const fetchUserProfile = async (u: User): Promise<Profile | null> => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      let p = await getProfile(u.uid);
+      if (!p) {
+        // إذا كان المستخدم جديداً ومسجلاً للتو
+        const isManagerEmail =
+          u.email?.includes('admin') ||
+          u.email?.includes('manager') ||
+          u.email === 'manager@mahamee.local';
 
-      if (error || !data) {
-        console.error('Error fetching profile:', error);
-        return null;
+        p = {
+          id: u.uid,
+          email: u.email || '',
+          name: u.displayName || u.email?.split('@')[0] || 'مستخدم',
+          role: isManagerEmail ? 'manager' : 'employee',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        await saveProfileToDb(p);
       }
-      return data as Profile;
+      return p;
     } catch (err) {
-      console.error('Exception fetching profile:', err);
+      console.error('Error fetching user profile:', err);
       return null;
     }
   };
 
   const refreshProfile = async () => {
     if (!user) return;
-    const p = await fetchProfile(user.id);
-    if (p) {
-      setProfile(p);
-    }
+    const p = await fetchUserProfile(user);
+    if (p) setProfile(p);
   };
 
   useEffect(() => {
-    if (!isSupabaseConfigured()) {
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('mahamee_demo_user');
-        if (saved) {
-          try {
-            const { user: u, profile: p } = JSON.parse(saved);
-            setUser(u);
-            setProfile(p);
-          } catch (e) {
-            console.error('Error parsing demo user', e);
-          }
-        }
+    if (typeof window !== 'undefined') {
+      const savedDemo = localStorage.getItem('mahamee_demo_user');
+      if (savedDemo) {
+        try {
+          const { user: u, profile: p } = JSON.parse(savedDemo);
+          setUser(u);
+          setProfile(p);
+          setLoading(false);
+          return;
+        } catch (e) {}
       }
+    }
+
+    if (!isFirebaseConfigured()) {
       setLoading(false);
       return;
     }
 
-    // التحقق الأولي من الجلسة الحالية
-    const initAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setUser(session.user);
-          const p = await fetchProfile(session.user.id);
-          if (p) {
-            if (!p.is_active) {
-              await supabase.auth.signOut();
-              setUser(null);
-              setProfile(null);
-            } else {
-              setProfile(p);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Auth initialization error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initAuth();
-
-    // الاستماع للتغيرات في حالة المصادقة
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        const p = await fetchProfile(session.user.id);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        setUser(firebaseUser);
+        const p = await fetchUserProfile(firebaseUser);
         if (p) {
           if (!p.is_active) {
-            await supabase.auth.signOut();
+            await firebaseSignOut(auth);
             setUser(null);
             setProfile(null);
           } else {
@@ -112,54 +99,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }
       } else {
-        setUser(null);
-        setProfile(null);
+        // تحقق إن لم نكن في وضع التجربة
+        const savedDemo = typeof window !== 'undefined' ? localStorage.getItem('mahamee_demo_user') : null;
+        if (!savedDemo) {
+          setUser(null);
+          setProfile(null);
+        }
       }
       setLoading(false);
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
-    if (!isSupabaseConfigured()) {
-      return { error: 'يرجى إعداد متغيرات البيئة الخاصة بـ Supabase أولاً (NEXT_PUBLIC_SUPABASE_URL و NEXT_PUBLIC_SUPABASE_ANON_KEY)' };
+    if (!isFirebaseConfigured()) {
+      return { error: 'يرجى إعداد بيانات Firebase أولاً في ملف .env.local' };
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-
-      if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          return { error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
-        }
-        return { error: error.message };
+      // مسح أي وضع تجريبي سابق
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('mahamee_demo_user');
       }
 
-      if (!data.user) {
-        return { error: 'تعذر تسجيل الدخول، يرجى المحاولة لاحقاً' };
-      }
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const p = await fetchUserProfile(credential.user);
 
-      // جلب الملف الشخصي والتحقق من حالة الحساب
-      const p = await fetchProfile(data.user.id);
       if (!p) {
         return { error: 'تعذر تحميل بيانات المستخدم. يرجى مراجعة إدارة النظام' };
       }
 
       if (!p.is_active) {
-        await supabase.auth.signOut();
+        await firebaseSignOut(auth);
+        setUser(null);
+        setProfile(null);
         return { error: 'تم تعطيل هذا الحساب من قبل الإدارة. يرجى مراجعة المديرة' };
       }
 
-      setUser(data.user);
+      setUser(credential.user);
       setProfile(p);
       return {};
     } catch (err: any) {
+      if (
+        err.code === 'auth/invalid-credential' ||
+        err.code === 'auth/user-not-found' ||
+        err.code === 'auth/wrong-password'
+      ) {
+        return { error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
+      }
+      if (err.code === 'auth/too-many-requests') {
+        return { error: 'تم إدخال كلمة المرور بشكل خاطئ عدة مرات. يرجى الانتظار قليلاً' };
+      }
       return { error: err.message || 'حدث خطأ أثناء تسجيل الدخول' };
     }
   };
@@ -187,12 +178,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           };
 
     const demoUser = {
-      id: demoProfile.id,
+      uid: demoProfile.id,
       email: demoProfile.email,
-      app_metadata: {},
-      user_metadata: { name: demoProfile.name, role: demoProfile.role },
-      aud: 'authenticated',
-      created_at: demoProfile.created_at,
+      displayName: demoProfile.name,
     } as unknown as User;
 
     setUser(demoUser);
@@ -204,8 +192,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     try {
-      if (isSupabaseConfigured()) {
-        await supabase.auth.signOut();
+      if (auth.currentUser) {
+        await firebaseSignOut(auth);
       }
     } catch (err) {
       console.error('Sign out error:', err);
@@ -221,7 +209,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isManager = profile?.role === 'manager';
   const isEmployee = profile?.role === 'employee';
-  const isDemoMode = !isSupabaseConfigured() || user?.id.startsWith('demo-') === true;
+  const isDemoMode =
+    !isFirebaseConfigured() ||
+    user?.uid.startsWith('demo-') === true ||
+    (typeof window !== 'undefined' && Boolean(localStorage.getItem('mahamee_demo_user')));
 
   return (
     <AuthContext.Provider

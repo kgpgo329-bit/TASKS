@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserRole } from '@/lib/supabase/types';
+import { UserRole } from '@/lib/firebase/types';
 import { Logo } from '@/components/Logo';
 
 interface AuthGuardProps {

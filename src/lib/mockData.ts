@@ -1,4 +1,4 @@
-import { Task, Profile } from './supabase/types';
+import { Task, Profile } from './firebase/types';
 
 export const INITIAL_DEMO_EMPLOYEES: Profile[] = [
   {

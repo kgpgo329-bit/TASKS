@@ -8,8 +8,8 @@ import { Header } from '@/components/Header';
 import { TaskCard } from '@/components/TaskCard';
 import { TaskModal } from '@/components/TaskModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase/client';
-import { Task, TaskStatus, Profile } from '@/lib/supabase/types';
+import { getAllTasks, getAllProfiles, updateTask, deleteTask, createTask } from '@/lib/firebase/db';
+import { Task, TaskStatus, Profile } from '@/lib/firebase/types';
 import { INITIAL_DEMO_TASKS, INITIAL_DEMO_EMPLOYEES } from '@/lib/mockData';
 
 export default function DashboardPage() {
@@ -55,32 +55,14 @@ export default function DashboardPage() {
     }
 
     try {
-      // جلب جميع المهام مع بيانات الموظفات المرتبطة
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select(`
-          *,
-          profiles:user_id (
-            id,
-            name,
-            email,
-            role,
-            is_active
-          )
-        `)
-        .order('created_at', { ascending: false });
+      const [tasksData, profilesData] = await Promise.all([getAllTasks(), getAllProfiles()]);
+      const tasksWithProfiles = tasksData.map((t) => ({
+        ...t,
+        profiles: profilesData.find((e) => e.id === t.user_id) || t.profiles,
+      }));
 
-      if (tasksError) console.error('Error fetching tasks:', tasksError);
-      else setTasks((tasksData || []) as Task[]);
-
-      // جلب قائمة الموظفات
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('name');
-
-      if (profilesError) console.error('Error fetching profiles:', profilesError);
-      else setEmployees((profilesData || []) as Profile[]);
+      setTasks(tasksWithProfiles);
+      setEmployees(profilesData);
     } catch (err) {
       console.error('Exception fetching dashboard data:', err);
     } finally {
@@ -107,15 +89,8 @@ export default function DashboardPage() {
         return;
       }
 
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: newStatus })
-        .eq('id', taskId);
-
-      if (error) {
-        console.error('Error updating status:', error);
-        fetchDashboardData();
-      }
+      await updateTask(taskId, { status: newStatus });
+      fetchDashboardData();
     } catch (err) {
       console.error('Exception updating status:', err);
       fetchDashboardData();
@@ -282,7 +257,7 @@ export default function DashboardPage() {
                           fetchDashboardData();
                           return;
                         }
-                        await supabase.from('tasks').delete().eq('id', taskId);
+                        await deleteTask(taskId);
                         fetchDashboardData();
                       }}
                     />
@@ -383,27 +358,24 @@ export default function DashboardPage() {
             }
 
             if (selectedTask) {
-              await supabase
-                .from('tasks')
-                .update({
-                  title: taskData.title,
-                  description: taskData.description,
-                  status: taskData.status,
-                  priority: taskData.priority,
-                  due_date: taskData.due_date,
-                  category: taskData.category,
-                  user_id: taskData.user_id || selectedTask.user_id,
-                })
-                .eq('id', selectedTask.id);
-            } else {
-              await supabase.from('tasks').insert({
+              await updateTask(selectedTask.id, {
                 title: taskData.title,
                 description: taskData.description,
                 status: taskData.status,
                 priority: taskData.priority,
                 due_date: taskData.due_date,
                 category: taskData.category,
-                user_id: taskData.user_id || profile?.id,
+                user_id: taskData.user_id || selectedTask.user_id,
+              });
+            } else {
+              await createTask({
+                title: taskData.title,
+                description: taskData.description,
+                status: taskData.status,
+                priority: taskData.priority,
+                due_date: taskData.due_date,
+                category: taskData.category,
+                user_id: taskData.user_id || profile?.id || '',
               });
             }
             fetchDashboardData();

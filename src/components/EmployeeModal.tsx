@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Profile, UserRole } from '@/lib/supabase/types';
+import { Profile, UserRole } from '@/lib/firebase/types';
 
 interface EmployeeModalProps {
   isOpen: boolean;

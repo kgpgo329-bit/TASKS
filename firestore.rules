@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // دالة مساعدة للتحقق مما إذا كان المستخدم مديراً نشطاً
+    function isManager() {
+      return request.auth != null && 
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'manager' &&
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.is_active == true;
+    }
+
+    // قواعد حماية الملفات الشخصية (profiles)
+    match /profiles/{userId} {
+      // الموظفة تقرأ وتعدل ملفها الشخصي، والمديرة تصل لجميع الموظفات
+      allow read: if request.auth != null && (request.auth.uid == userId || isManager());
+      allow create, update: if request.auth != null && (request.auth.uid == userId || isManager());
+      allow delete: if isManager();
+    }
+
+    // قواعد حماية المهام (tasks)
+    match /tasks/{taskId} {
+      // الموظفة تقرأ وتعدل وتحذف مهامها الخاصة فقط
+      // المديرة تقرأ وتعدل وتتحكم في جميع المهام
+      allow read: if request.auth != null && (resource.data.user_id == request.auth.uid || isManager());
+      allow create: if request.auth != null && (request.resource.data.user_id == request.auth.uid || isManager());
+      allow update, delete: if request.auth != null && (resource.data.user_id == request.auth.uid || isManager());
+    }
+  }
+}

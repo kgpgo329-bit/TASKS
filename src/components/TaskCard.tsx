@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Task, TaskStatus } from '@/lib/supabase/types';
+import { Task, TaskStatus } from '@/lib/firebase/types';
 
 interface TaskCardProps {
   task: Task;

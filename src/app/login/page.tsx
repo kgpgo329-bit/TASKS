@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Logo } from '@/components/Logo';
-import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { isFirebaseConfigured } from '@/lib/firebase/config';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -43,7 +43,7 @@ export default function LoginPage() {
     }
   };
 
-  const configured = isSupabaseConfigured();
+  const configured = isFirebaseConfigured();
 
   return (
     <div className="min-h-screen bg-background flex flex-col justify-center items-center p-4">
@@ -65,10 +65,10 @@ export default function LoginPage() {
           <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col gap-1">
             <div className="flex items-center gap-1.5 font-bold">
               <span className="material-symbols-outlined text-[18px] text-amber-600">info</span>
-              <span>تنبيه تهيئة Supabase:</span>
+              <span>تنبيه تهيئة Firebase:</span>
             </div>
             <p className="text-[11px] leading-relaxed">
-              يرجى إضافة مفاتيح Supabase في ملف <code className="bg-amber-100 px-1 py-0.5 rounded text-amber-800">.env.local</code> أو في إعدادات مشروعك على Vercel للاتصال بقاعدة البيانات.
+              يرجى إضافة مفاتيح Firebase في ملف <code className="bg-amber-100 px-1 py-0.5 rounded text-amber-800">.env.local</code> أو في إعدادات مشروعك على Vercel للاتصال بقاعدة البيانات.
             </p>
           </div>
         )}

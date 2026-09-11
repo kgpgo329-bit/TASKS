@@ -7,8 +7,8 @@ import { Header } from '@/components/Header';
 import { TaskCard } from '@/components/TaskCard';
 import { TaskModal } from '@/components/TaskModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase/client';
-import { Task, TaskStatus, TaskPriority } from '@/lib/supabase/types';
+import { getUserTasks, createTask, updateTask, deleteTask } from '@/lib/firebase/db';
+import { Task, TaskStatus, TaskPriority } from '@/lib/firebase/types';
 import { INITIAL_DEMO_TASKS } from '@/lib/mockData';
 
 export default function MyTasksPage() {
@@ -24,9 +24,11 @@ export default function MyTasksPage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
 
+  const currentUserId = user?.uid || (user as any)?.id;
+
   // جلب مهام المستخدم الحالي فقط
   const fetchMyTasks = async () => {
-    if (!user) return;
+    if (!currentUserId) return;
     setLoading(true);
 
     if (isDemoMode) {
@@ -36,7 +38,7 @@ export default function MyTasksPage() {
         if (!saved && typeof window !== 'undefined') {
           localStorage.setItem('mahamee_demo_tasks', JSON.stringify(INITIAL_DEMO_TASKS));
         }
-        const myTasks = allTasks.filter((t) => t.user_id === user.id);
+        const myTasks = allTasks.filter((t) => t.user_id === currentUserId);
         setTasks(myTasks);
       } catch (e) {
         console.error('Error loading demo tasks', e);
@@ -47,17 +49,8 @@ export default function MyTasksPage() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching tasks:', error);
-      } else {
-        setTasks((data || []) as Task[]);
-      }
+      const myTasks = await getUserTasks(currentUserId);
+      setTasks(myTasks);
     } catch (err) {
       console.error('Exception fetching tasks:', err);
     } finally {
@@ -84,15 +77,7 @@ export default function MyTasksPage() {
         return;
       }
 
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: newStatus })
-        .eq('id', taskId);
-
-      if (error) {
-        console.error('Error updating task status:', error);
-        fetchMyTasks();
-      }
+      await updateTask(taskId, { status: newStatus });
     } catch (err) {
       console.error('Exception updating task status:', err);
       fetchMyTasks();
@@ -137,7 +122,7 @@ export default function MyTasksPage() {
           priority: taskData.priority,
           due_date: taskData.due_date,
           category: taskData.category,
-          user_id: user.id,
+          user_id: currentUserId,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -149,39 +134,32 @@ export default function MyTasksPage() {
     }
 
     if (editingTask) {
-      const { data, error } = await supabase
-        .from('tasks')
-        .update({
-          title: taskData.title,
-          description: taskData.description,
-          status: taskData.status,
-          priority: taskData.priority,
-          due_date: taskData.due_date,
-          category: taskData.category,
-        })
-        .eq('id', editingTask.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      setTasks((prev) => prev.map((t) => (t.id === editingTask.id ? (data as Task) : t)));
+      await updateTask(editingTask.id, {
+        title: taskData.title,
+        description: taskData.description,
+        status: taskData.status,
+        priority: taskData.priority,
+        due_date: taskData.due_date,
+        category: taskData.category,
+      });
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === editingTask.id
+            ? { ...t, ...taskData, updated_at: new Date().toISOString() }
+            : t
+        )
+      );
     } else {
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert({
-          title: taskData.title,
-          description: taskData.description,
-          status: taskData.status,
-          priority: taskData.priority,
-          due_date: taskData.due_date,
-          category: taskData.category,
-          user_id: user.id,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      setTasks((prev) => [data as Task, ...prev]);
+      const newTask = await createTask({
+        title: taskData.title,
+        description: taskData.description,
+        status: taskData.status,
+        priority: taskData.priority,
+        due_date: taskData.due_date,
+        category: taskData.category,
+        user_id: currentUserId,
+      });
+      setTasks((prev) => [newTask, ...prev]);
     }
   };
 
@@ -200,12 +178,7 @@ export default function MyTasksPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskToDelete);
-
-      if (error) throw error;
+      await deleteTask(taskToDelete);
       setTasks((prev) => prev.filter((t) => t.id !== taskToDelete));
       setTaskToDelete(null);
     } catch (err) {

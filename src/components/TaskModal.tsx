@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Task, TaskPriority, TaskStatus, Profile } from '@/lib/supabase/types';
+import { Task, TaskPriority, TaskStatus, Profile } from '@/lib/firebase/types';
 
 interface TaskModalProps {
   isOpen: boolean;

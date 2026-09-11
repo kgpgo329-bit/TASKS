@@ -6,8 +6,9 @@ import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { EmployeeModal } from '@/components/EmployeeModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase/client';
-import { Profile, UserRole, Task } from '@/lib/supabase/types';
+import { getAllProfiles, getAllTasks, updateProfile, deleteProfile, setProfile } from '@/lib/firebase/db';
+import { createEmployeeAuthAccount } from '@/lib/firebase/config';
+import { Profile, UserRole, Task } from '@/lib/firebase/types';
 import { INITIAL_DEMO_EMPLOYEES, INITIAL_DEMO_TASKS } from '@/lib/mockData';
 
 interface EmployeeWithStats extends Profile {
@@ -27,12 +28,6 @@ export default function EmployeesPage() {
   const [employeeToDelete, setEmployeeToDelete] = useState<Profile | null>(null);
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
-
-  // دالة مساعدة للحصول على JWT الخاص بالمديرة للطلبات الإدارية الآمنة
-  const getAuthToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token || '';
-  };
 
   const fetchEmployees = async () => {
     setLoading(true);
@@ -69,19 +64,18 @@ export default function EmployeesPage() {
     }
 
     try {
-      const token = await getAuthToken();
-      const res = await fetch('/api/admin/users', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const [profilesData, tasksData] = await Promise.all([getAllProfiles(), getAllTasks()]);
+      const empsWithStats: EmployeeWithStats[] = profilesData.map((emp) => {
+        const empTasks = tasksData.filter((t) => t.user_id === emp.id);
+        return {
+          ...emp,
+          total_tasks: empTasks.length,
+          completed_tasks: empTasks.filter((t) => t.status === 'completed').length,
+          in_progress_tasks: empTasks.filter((t) => t.status === 'in_progress').length,
+        };
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'فشل جلب قائمة الموظفات');
-      }
-
-      setEmployees(data.profiles || []);
+      setEmployees(empsWithStats);
     } catch (err: any) {
       console.error('Error fetching employees:', err);
       setActionError(err.message || 'حدث خطأ في تحميل قائمة الموظفات');
@@ -134,25 +128,40 @@ export default function EmployeesPage() {
       return;
     }
 
-    const token = await getAuthToken();
-    const isEdit = Boolean(employeeData.id);
+    try {
+      const isEdit = Boolean(employeeData.id);
 
-    const res = await fetch('/api/admin/users', {
-      method: isEdit ? 'PUT' : 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(employeeData),
-    });
+      if (isEdit && employeeData.id) {
+        await updateProfile(employeeData.id, {
+          name: employeeData.name,
+          role: employeeData.role,
+          is_active: employeeData.is_active,
+        });
+        setActionSuccess('تم تحديث بيانات الموظفة بنجاح');
+      } else {
+        if (!employeeData.email || !employeeData.password) {
+          throw new Error('البريد الإلكتروني وكلمة المرور مطلوبة لإنشاء الموظفة');
+        }
+        const newUid = await createEmployeeAuthAccount(employeeData.email, employeeData.password);
+        const now = new Date().toISOString();
+        await setProfile({
+          id: newUid,
+          name: employeeData.name,
+          email: employeeData.email,
+          role: employeeData.role,
+          is_active: employeeData.is_active,
+          created_at: now,
+          updated_at: now,
+        });
+        setActionSuccess('تم إضافة الموظفة وإنشاء الحساب بنجاح');
+      }
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'تعذر حفظ بيانات الموظفة');
+      fetchEmployees();
+    } catch (err: any) {
+      console.error('Error saving employee:', err);
+      setActionError(err.message || 'تعذر حفظ بيانات الموظفة');
+      throw err;
     }
-
-    setActionSuccess(isEdit ? 'تم تحديث بيانات الموظفة بنجاح' : 'تم إضافة الموظفة وإنشاء الحساب بنجاح');
-    fetchEmployees();
   };
 
   // تبديل حالة الحساب (تعطيل / تفعيل سريع)
@@ -177,21 +186,9 @@ export default function EmployeesPage() {
     }
 
     try {
-      const token = await getAuthToken();
-      const res = await fetch('/api/admin/users', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          id: employee.id,
-          is_active: !employee.is_active,
-        }),
+      await updateProfile(employee.id, {
+        is_active: !employee.is_active,
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'تعذر تغيير حالة الحساب');
 
       setActionSuccess(
         !employee.is_active
@@ -200,7 +197,7 @@ export default function EmployeesPage() {
       );
       fetchEmployees();
     } catch (err: any) {
-      setActionError(err.message);
+      setActionError(err.message || 'تعذر تغيير حالة الحساب');
     }
   };
 
@@ -222,22 +219,13 @@ export default function EmployeesPage() {
     }
 
     try {
-      const token = await getAuthToken();
-      const res = await fetch(`/api/admin/users?id=${employeeToDelete.id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'تعذر حذف الموظفة');
+      await deleteProfile(employeeToDelete.id);
 
       setActionSuccess(`تم حذف حساب الموظفة (${employeeToDelete.name}) بنجاح`);
       setEmployeeToDelete(null);
       fetchEmployees();
     } catch (err: any) {
-      setActionError(err.message);
+      setActionError(err.message || 'تعذر حذف الموظفة');
     }
   };
 
@@ -340,7 +328,7 @@ export default function EmployeesPage() {
                   </thead>
                   <tbody className="divide-y divide-surface-variant/30">
                     {filteredEmployees.map((emp) => {
-                      const isCurrentUser = emp.id === user?.id;
+                      const isCurrentUser = emp.id === user?.uid;
 
                       return (
                         <tr

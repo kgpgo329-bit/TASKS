@@ -7,8 +7,8 @@ import { Header } from '@/components/Header';
 import { TaskCard } from '@/components/TaskCard';
 import { TaskModal } from '@/components/TaskModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase/client';
-import { Task, TaskStatus, TaskPriority, Profile } from '@/lib/supabase/types';
+import { getAllTasks, getAllProfiles, updateTask, createTask, deleteTask } from '@/lib/firebase/db';
+import { Task, TaskStatus, TaskPriority, Profile } from '@/lib/firebase/types';
 import { INITIAL_DEMO_TASKS, INITIAL_DEMO_EMPLOYEES } from '@/lib/mockData';
 
 export default function AllTasksPage() {
@@ -58,32 +58,13 @@ export default function AllTasksPage() {
     }
 
     try {
-      // جلب جميع المهام مع بيانات الموظفات
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select(`
-          *,
-          profiles:user_id (
-            id,
-            name,
-            email,
-            role,
-            is_active
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (tasksError) console.error('Error fetching tasks:', tasksError);
-      else setTasks((tasksData || []) as Task[]);
-
-      // جلب قائمة الموظفات
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('name');
-
-      if (profilesError) console.error('Error fetching profiles:', profilesError);
-      else setEmployees((profilesData || []) as Profile[]);
+      const [tasksData, profilesData] = await Promise.all([getAllTasks(), getAllProfiles()]);
+      const tasksWithProfiles = tasksData.map((t) => ({
+        ...t,
+        profiles: profilesData.find((p) => p.id === t.user_id),
+      }));
+      setTasks(tasksWithProfiles);
+      setEmployees(profilesData);
     } catch (err) {
       console.error('Exception fetching tasks:', err);
     } finally {
@@ -110,15 +91,7 @@ export default function AllTasksPage() {
         return;
       }
 
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: newStatus })
-        .eq('id', taskId);
-
-      if (error) {
-        console.error('Error updating task status:', error);
-        fetchAllData();
-      }
+      await updateTask(taskId, { status: newStatus });
     } catch (err) {
       console.error('Exception updating task status:', err);
       fetchAllData();
@@ -164,32 +137,25 @@ export default function AllTasksPage() {
     }
 
     if (editingTask) {
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          title: taskData.title,
-          description: taskData.description,
-          status: taskData.status,
-          priority: taskData.priority,
-          due_date: taskData.due_date,
-          category: taskData.category,
-          user_id: taskData.user_id || editingTask.user_id,
-        })
-        .eq('id', editingTask.id);
-
-      if (error) throw error;
-    } else {
-      const { error } = await supabase.from('tasks').insert({
+      await updateTask(editingTask.id, {
         title: taskData.title,
         description: taskData.description,
         status: taskData.status,
         priority: taskData.priority,
         due_date: taskData.due_date,
         category: taskData.category,
-        user_id: taskData.user_id || profile?.id,
+        user_id: taskData.user_id || editingTask.user_id,
       });
-
-      if (error) throw error;
+    } else {
+      await createTask({
+        title: taskData.title,
+        description: taskData.description,
+        status: taskData.status,
+        priority: taskData.priority,
+        due_date: taskData.due_date,
+        category: taskData.category,
+        user_id: taskData.user_id || profile?.id || '',
+      });
     }
     fetchAllData();
   };
@@ -208,8 +174,7 @@ export default function AllTasksPage() {
     }
 
     try {
-      const { error } = await supabase.from('tasks').delete().eq('id', taskToDelete);
-      if (error) throw error;
+      await deleteTask(taskToDelete);
       setTasks((prev) => prev.filter((t) => t.id !== taskToDelete));
       setTaskToDelete(null);
     } catch (err) {
