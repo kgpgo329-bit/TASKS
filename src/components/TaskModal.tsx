@@ -44,28 +44,37 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (initialTask) {
-      setTitle(initialTask.title);
-      setDescription(initialTask.description || '');
-      setManagerNote(initialTask.manager_note || '');
-      setStatus(initialTask.status);
-      setPriority(initialTask.priority);
-      setDueDate(initialTask.due_date || '');
-      setCategory(initialTask.category || 'عام');
-      setAssignedUserId(initialTask.user_id);
-    } else {
-      setTitle('');
-      setDescription('');
-      setManagerNote('');
-      setStatus('not_started');
-      setPriority('medium');
-      setDueDate('');
-      setCategory('عام');
-      setAssignedUserId(employeesList[0]?.id || '');
+    if (isOpen) {
+      if (initialTask) {
+        setTitle(initialTask.title || '');
+        setDescription(initialTask.description || '');
+        setManagerNote(initialTask.manager_note || '');
+        setStatus(initialTask.status || 'not_started');
+        setPriority(initialTask.priority || 'medium');
+        setDueDate(initialTask.due_date || '');
+        setCategory(initialTask.category || 'عام');
+        setAssignedUserId(initialTask.user_id || '');
+      } else {
+        setTitle('');
+        setDescription('');
+        setManagerNote('');
+        setStatus('not_started');
+        setPriority('medium');
+        setDueDate('');
+        setCategory('عام');
+        setAssignedUserId(employeesList[0]?.id || '');
+      }
+      setSelectedFiles([]);
+      setError('');
     }
-    setSelectedFiles([]);
-    setError('');
-  }, [initialTask, isOpen, employeesList]);
+  }, [initialTask, isOpen]);
+
+  // تحديث الموظفة المختارة تلقائياً عند تحميل قائمة الموظفات دون مسح المدخلات
+  useEffect(() => {
+    if (!assignedUserId && employeesList.length > 0 && !initialTask) {
+      setAssignedUserId(employeesList[0].id);
+    }
+  }, [employeesList, assignedUserId, initialTask]);
 
   if (!isOpen) return null;
 
@@ -86,6 +95,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       return;
     }
 
+    const effectiveAssignedUserId = isManager
+      ? (assignedUserId || employeesList[0]?.id || undefined)
+      : undefined;
+
     setLoading(true);
     setError('');
 
@@ -97,12 +110,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         status,
         priority,
         due_date: dueDate || null,
-        category,
-        user_id: isManager && assignedUserId ? assignedUserId : undefined,
+        category: category || 'عام',
+        user_id: effectiveAssignedUserId,
         selectedFiles: selectedFiles.length > 0 ? selectedFiles : undefined,
       });
       onClose();
     } catch (err: any) {
+      console.error('Error saving task in modal:', err);
       setError(err.message || 'حدث خطأ أثناء حفظ المهمة');
     } finally {
       setLoading(false);
@@ -308,24 +322,33 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             )}
           </div>
 
+          {/* تنبيه الخطأ بالقرب من أزرار الإجراءات لضمان رؤيته فوراً */}
+          {error && (
+            <div className="p-3 rounded-2xl bg-error-container/40 text-on-error-container text-xs flex items-center gap-2 border border-error/20">
+              <span className="material-symbols-outlined text-[18px] text-error flex-shrink-0">error</span>
+              <span className="flex-1">{error}</span>
+            </div>
+          )}
+
           {/* أزرار الإجراءات */}
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-surface-variant/30">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-outline hover:bg-surface-container transition-colors"
+              disabled={loading}
+              className="px-4 py-2 rounded-xl text-xs font-medium text-outline hover:bg-surface-container transition-colors disabled:opacity-50"
             >
               إلغاء
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2.5 bg-primary hover:bg-secondary text-white rounded-xl text-xs font-bold shadow-sm transition-all disabled:opacity-50 flex items-center gap-1.5"
+              className="px-6 py-2.5 bg-primary hover:bg-secondary text-white rounded-xl text-xs font-bold shadow-sm transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
             >
               {loading && (
                 <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               )}
-              <span>{initialTask ? 'حفظ التعديلات' : 'إرسال وتكليف المهمة'}</span>
+              <span>{loading ? 'جاري الإرسال...' : (initialTask ? 'حفظ التعديلات' : 'إرسال وتكليف المهمة')}</span>
             </button>
           </div>
         </form>

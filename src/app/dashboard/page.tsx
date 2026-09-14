@@ -12,7 +12,7 @@ import { AddEmployeeModal } from '@/components/AddEmployeeModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllTasks, getAllProfiles, updateTask, deleteTask, createTask, getTask } from '@/lib/firebase/db';
 import { uploadTaskFile } from '@/lib/firebase/storage';
-import { Task, TaskStatus, Profile, TaskAttachment } from '@/lib/firebase/types';
+import { Task, TaskStatus, Profile, TaskAttachment, UserRole } from '@/lib/firebase/types';
 
 export default function DashboardPage() {
   const { user, profile } = useAuth();
@@ -398,7 +398,7 @@ export default function DashboardPage() {
             const currentActor = {
               id: user?.uid || profile?.id || '',
               name: profile?.name || 'المديرة',
-              role: 'manager' as const,
+              role: (profile?.role || 'manager') as UserRole,
             };
 
             if (selectedTask) {
@@ -426,6 +426,8 @@ export default function DashboardPage() {
                 }
               }
 
+              const targetUserId = taskData.user_id || (employees.length > 0 ? employees[0].id : (profile?.id || ''));
+
               await createTask(
                 {
                   title: taskData.title,
@@ -435,7 +437,7 @@ export default function DashboardPage() {
                   priority: taskData.priority,
                   due_date: taskData.due_date,
                   category: taskData.category,
-                  user_id: taskData.user_id || profile?.id || '',
+                  user_id: targetUserId,
                   created_by: currentActor.id,
                   creator_name: currentActor.name,
                   attachments: uploadedAttachments,
@@ -443,7 +445,7 @@ export default function DashboardPage() {
                 currentActor
               );
             }
-            fetchDashboardData();
+            await fetchDashboardData(true);
           }}
           initialTask={selectedTask}
           employeesList={employees}

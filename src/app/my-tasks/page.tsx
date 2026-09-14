@@ -9,7 +9,8 @@ import { TaskModal } from '@/components/TaskModal';
 import { TaskDetailsModal } from '@/components/TaskDetailsModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserTasks, createTask, updateTask, deleteTask, getTask } from '@/lib/firebase/db';
-import { Task, TaskStatus, TaskPriority } from '@/lib/firebase/types';
+import { Task, TaskStatus, TaskPriority, TaskAttachment, UserRole } from '@/lib/firebase/types';
+import { uploadTaskFile } from '@/lib/firebase/storage';
 
 export default function MyTasksPage() {
   const { user, profile, isManager } = useAuth();
@@ -71,42 +72,62 @@ export default function MyTasksPage() {
   const handleSaveTask = async (taskData: {
     title: string;
     description: string;
+    manager_note?: string;
     status: TaskStatus;
     priority: TaskPriority;
     due_date: string | null;
     category: string;
     user_id?: string;
+    selectedFiles?: File[];
   }) => {
     if (!user) return;
 
+    const currentActor = {
+      id: currentUserId,
+      name: profile?.name || 'الموظفة',
+      role: (profile?.role || 'employee') as UserRole,
+    };
+
     if (editingTask) {
-      await updateTask(editingTask.id, {
-        title: taskData.title,
-        description: taskData.description,
-        status: taskData.status,
-        priority: taskData.priority,
-        due_date: taskData.due_date,
-        category: taskData.category,
-      });
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === editingTask.id
-            ? { ...t, ...taskData, updated_at: new Date().toISOString() }
-            : t
-        )
+      await updateTask(
+        editingTask.id,
+        {
+          title: taskData.title,
+          description: taskData.description,
+          status: taskData.status,
+          priority: taskData.priority,
+          due_date: taskData.due_date,
+          category: taskData.category,
+        },
+        currentActor
       );
     } else {
-      const newTask = await createTask({
-        title: taskData.title,
-        description: taskData.description,
-        status: taskData.status,
-        priority: taskData.priority,
-        due_date: taskData.due_date,
-        category: taskData.category,
-        user_id: currentUserId,
-      });
-      setTasks((prev) => [newTask, ...prev]);
+      const uploadedAttachments: TaskAttachment[] = [];
+      const tempTaskId = `task-${Date.now()}`;
+      if (taskData.selectedFiles && taskData.selectedFiles.length > 0) {
+        for (const file of taskData.selectedFiles) {
+          const att = await uploadTaskFile(tempTaskId, file, currentActor);
+          uploadedAttachments.push(att);
+        }
+      }
+
+      await createTask(
+        {
+          title: taskData.title,
+          description: taskData.description,
+          status: taskData.status,
+          priority: taskData.priority,
+          due_date: taskData.due_date,
+          category: taskData.category,
+          user_id: currentUserId,
+          created_by: currentActor.id,
+          creator_name: currentActor.name,
+          attachments: uploadedAttachments,
+        },
+        currentActor
+      );
     }
+    await fetchMyTasks(true);
   };
 
   // حذف مهمة

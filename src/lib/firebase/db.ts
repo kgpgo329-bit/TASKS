@@ -42,6 +42,27 @@ export function withTimeout<T>(
   ]);
 }
 
+/**
+ * تنظيف أي قيم غير معرفة (undefined) قبل إرسالها لـ Firestore لمنع أخطاء الحفظ
+ */
+export function sanitizeFirestorePayload<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const clean: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      if (Array.isArray(value)) {
+        clean[key] = value.map((item) =>
+          typeof item === 'object' && item !== null ? sanitizeFirestorePayload(item) : item
+        );
+      } else if (typeof value === 'object' && value !== null && !(value instanceof Date)) {
+        clean[key] = sanitizeFirestorePayload(value);
+      } else {
+        clean[key] = value;
+      }
+    }
+  }
+  return clean;
+}
+
 // ==============================================================================
 // Profiles (المستخدمات / الموظفات)
 // ==============================================================================
@@ -270,65 +291,73 @@ export async function createTask(
 ): Promise<Task> {
   const tasksCol = collection(db, 'tasks');
   const now = new Date().toISOString();
-  const payload = {
+  const rawPayload = {
     ...taskData,
     status: taskData.status || 'not_started',
+    priority: taskData.priority || 'medium',
+    category: taskData.category || 'عام',
     is_locked: taskData.is_locked !== undefined ? taskData.is_locked : true,
     attachments: taskData.attachments || [],
     created_at: now,
     updated_at: now,
   };
 
-  const docRef = await addDoc(tasksCol, payload);
+  const payload = sanitizeFirestorePayload(rawPayload);
+
+  const docRef = await withTimeout(
+    addDoc(tasksCol, payload),
+    10000,
+    'تعذر حفظ وإرسال المهمة: استغرقت قاعدة البيانات وقتاً أطول من المتوقع، يرجى التحقق من الاتصال والمحاولة مجدداً.'
+  );
   const taskId = docRef.id;
 
-  // تسجيل النشاط الأولي: إنشاء المهمة
+  // تسجيل النشاط والإشعارات في الخلفية لضمان سرعة الاستجابة اللحظية دون حجب واجهة المستخدم
   if (actor) {
-    await logTaskActivity(taskId, {
-      task_id: taskId,
-      user_id: actor.id,
-      user_name: actor.name,
-      user_role: actor.role,
-      type: 'task_created',
-      details: `تم إنشاء المهمة: "${taskData.title}"`,
-    });
-
-    if (taskData.user_id && taskData.user_id !== actor.id) {
-      // تسجيل نشاط الإسناد
-      await logTaskActivity(taskId, {
+    Promise.allSettled([
+      logTaskActivity(taskId, {
         task_id: taskId,
         user_id: actor.id,
         user_name: actor.name,
         user_role: actor.role,
-        type: 'task_assigned',
-        details: `تم إرسال وتكليف المهمة للموظفة`,
-      });
-
-      // إرسال إشعار للموظفة المكلفة
-      await createNotification({
-        user_id: taskData.user_id,
-        actor_id: actor.id,
-        actor_name: actor.name,
-        task_id: taskId,
-        task_title: taskData.title,
-        type: 'new_task',
-        title: 'مهمة جديدة أُسندت إليك',
-        message: `أرسلت لك ${actor.name} مهمة: "${taskData.title}"`,
-        is_read: false,
-      });
-    }
-
-    // إذا كانت هناك مرفقات مبدئية مسجلة
-    if (taskData.attachments && taskData.attachments.length > 0) {
-      await logTaskActivity(taskId, {
-        task_id: taskId,
-        user_id: actor.id,
-        user_name: actor.name,
-        user_role: actor.role,
-        type: 'attachment_added',
-        details: `تم إرفاق ${taskData.attachments.length} ملف/صورة مع المهمة`,
-      });
-    }
+        type: 'task_created',
+        details: `تم إنشاء المهمة: "${taskData.title}"`,
+      }),
+      ...(taskData.user_id && taskData.user_id !== actor.id
+        ? [
+            logTaskActivity(taskId, {
+              task_id: taskId,
+              user_id: actor.id,
+              user_name: actor.name,
+              user_role: actor.role,
+              type: 'task_assigned',
+              details: `تم إرسال وتكليف المهمة للموظفة`,
+            }),
+            createNotification({
+              user_id: taskData.user_id,
+              actor_id: actor.id,
+              actor_name: actor.name,
+              task_id: taskId,
+              task_title: taskData.title,
+              type: 'new_task',
+              title: 'مهمة جديدة أُسندت إليك',
+              message: `أرسلت لك ${actor.name} مهمة: "${taskData.title}"`,
+              is_read: false,
+            }),
+          ]
+        : []),
+      ...(taskData.attachments && taskData.attachments.length > 0
+        ? [
+            logTaskActivity(taskId, {
+              task_id: taskId,
+              user_id: actor.id,
+              user_name: actor.name,
+              user_role: actor.role,
+              type: 'attachment_added',
+              details: `تم إرفاق ${taskData.attachments.length} ملف/صورة مع المهمة`,
+            }),
+          ]
+        : []),
+    ]).catch(() => {});
   }
 
   invalidateCache();
@@ -336,7 +365,7 @@ export async function createTask(
   return {
     ...payload,
     id: taskId,
-  };
+  } as Task;
 }
 
 export async function updateTask(
@@ -346,20 +375,26 @@ export async function updateTask(
 ): Promise<void> {
   const docRef = doc(db, 'tasks', taskId);
   const now = new Date().toISOString();
-  await updateDoc(docRef, {
+  const payload = sanitizeFirestorePayload({
     ...data,
     updated_at: now,
   });
 
+  await withTimeout(
+    updateDoc(docRef, payload),
+    10000,
+    'تعذر تعديل بيانات المهمة: استغرقت قاعدة البيانات وقتاً أطول من المتوقع.'
+  );
+
   if (actor) {
-    await logTaskActivity(taskId, {
+    logTaskActivity(taskId, {
       task_id: taskId,
       user_id: actor.id,
       user_name: actor.name,
       user_role: actor.role,
       type: 'task_updated',
       details: `تم تعديل بيانات المهمة بواسطة ${actor.name}`,
-    });
+    }).catch(() => {});
   }
 
   invalidateCache();
@@ -367,7 +402,11 @@ export async function updateTask(
 
 export async function deleteTask(taskId: string): Promise<void> {
   const docRef = doc(db, 'tasks', taskId);
-  await deleteDoc(docRef);
+  await withTimeout(
+    deleteDoc(docRef),
+    10000,
+    'تعذر حذف المهمة: استغرقت قاعدة البيانات وقتاً أطول من المتوقع.'
+  );
   invalidateCache();
 }
 
@@ -385,35 +424,41 @@ export async function addAttachmentToTask(
   const docRef = doc(db, 'tasks', taskId);
   const now = new Date().toISOString();
 
-  await updateDoc(docRef, {
-    attachments: arrayUnion(attachment),
-    updated_at: now,
-  });
+  await withTimeout(
+    updateDoc(docRef, {
+      attachments: arrayUnion(sanitizeFirestorePayload(attachment as any)),
+      updated_at: now,
+    }),
+    10000,
+    'تعذر إضافة المرفق: استغرقت قاعدة البيانات وقتاً أطول من المتوقع.'
+  );
 
-  // تسجيل النشاط
-  await logTaskActivity(taskId, {
-    task_id: taskId,
-    user_id: actor.id,
-    user_name: actor.name,
-    user_role: actor.role,
-    type: 'attachment_added',
-    details: `أرفق ملفاً: "${attachment.name}"`,
-  });
-
-  // إرسال إشعار للطرف الآخر إن وجد
-  if (recipientUserId && recipientUserId !== actor.id) {
-    await createNotification({
-      user_id: recipientUserId,
-      actor_id: actor.id,
-      actor_name: actor.name,
+  // تسجيل النشاط والإشعار في الخلفية
+  Promise.allSettled([
+    logTaskActivity(taskId, {
       task_id: taskId,
-      task_title: taskTitle,
+      user_id: actor.id,
+      user_name: actor.name,
+      user_role: actor.role,
       type: 'attachment_added',
-      title: 'مرفق جديد في المهمة',
-      message: `أضافت ${actor.name} مرفقاً جديداً: "${attachment.name}"`,
-      is_read: false,
-    });
-  }
+      details: `أرفق ملفاً: "${attachment.name}"`,
+    }),
+    ...(recipientUserId && recipientUserId !== actor.id
+      ? [
+          createNotification({
+            user_id: recipientUserId,
+            actor_id: actor.id,
+            actor_name: actor.name,
+            task_id: taskId,
+            task_title: taskTitle,
+            type: 'attachment_added',
+            title: 'مرفق جديد في المهمة',
+            message: `أضافت ${actor.name} مرفقاً جديداً: "${attachment.name}"`,
+            is_read: false,
+          }),
+        ]
+      : []),
+  ]).catch(() => {});
 }
 
 export async function updateTaskStatusWithProof(
@@ -440,41 +485,51 @@ export async function updateTaskStatusWithProof(
   }
 
   if (options?.newAttachments && options.newAttachments.length > 0) {
-    updatePayload.attachments = arrayUnion(...options.newAttachments);
+    updatePayload.attachments = arrayUnion(
+      ...options.newAttachments.map((att) => sanitizeFirestorePayload(att as any))
+    );
   }
 
-  await updateDoc(docRef, updatePayload);
+  const cleanPayload = sanitizeFirestorePayload(updatePayload);
+
+  await withTimeout(
+    updateDoc(docRef, cleanPayload),
+    10000,
+    'تعذر تحديث حالة المهمة: استغرقت قاعدة البيانات وقتاً أطول من المتوقع.'
+  );
   invalidateCache();
 
   const statusName = TASK_STATUS_LABELS[newStatus] || newStatus;
   const isCompletion = newStatus === 'completed';
 
-  // تسجيل نشاط تغيير الحالة
-  await logTaskActivity(taskId, {
-    task_id: taskId,
-    user_id: actor.id,
-    user_name: actor.name,
-    user_role: actor.role,
-    type: isCompletion ? 'task_completed' : 'status_changed',
-    details: `تم تغيير حالة المهمة إلى "${statusName}"${
-      options?.employeeNote ? ` (ملاحظة: ${options.employeeNote})` : ''
-    }`,
-  });
-
-  // إرسال إشعار للطرف الآخر
-  if (options?.recipientUserId && options.recipientUserId !== actor.id) {
-    await createNotification({
-      user_id: options.recipientUserId,
-      actor_id: actor.id,
-      actor_name: actor.name,
+  // تسجيل نشاط تغيير الحالة والإشعار في الخلفية
+  Promise.allSettled([
+    logTaskActivity(taskId, {
       task_id: taskId,
-      task_title: taskTitle,
-      type: 'status_changed',
-      title: isCompletion ? 'تم إنجاز المهمة' : 'تحديث حالة المهمة',
-      message: `قامت ${actor.name} بتحديث حالة "${taskTitle}" إلى: ${statusName}`,
-      is_read: false,
-    });
-  }
+      user_id: actor.id,
+      user_name: actor.name,
+      user_role: actor.role,
+      type: isCompletion ? 'task_completed' : 'status_changed',
+      details: `تم تغيير حالة المهمة إلى "${statusName}"${
+        options?.employeeNote ? ` (ملاحظة: ${options.employeeNote})` : ''
+      }`,
+    }),
+    ...(options?.recipientUserId && options.recipientUserId !== actor.id
+      ? [
+          createNotification({
+            user_id: options.recipientUserId,
+            actor_id: actor.id,
+            actor_name: actor.name,
+            task_id: taskId,
+            task_title: taskTitle,
+            type: 'status_changed',
+            title: isCompletion ? 'تم إنجاز المهمة' : 'تحديث حالة المهمة',
+            message: `قامت ${actor.name} بتحديث حالة "${taskTitle}" إلى: ${statusName}`,
+            is_read: false,
+          }),
+        ]
+      : []),
+  ]).catch(() => {});
 }
 
 // ==============================================================================
