@@ -29,12 +29,15 @@ export default function AllTasksPage() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const fetchAllData = async () => {
+  const fetchAllData = async (forceRefresh = false) => {
     setLoading(true);
     setFetchError(null);
 
     try {
-      const [tasksData, profilesData] = await Promise.all([getAllTasks(), getAllProfiles()]);
+      const [tasksData, profilesData] = await Promise.all([
+        getAllTasks(forceRefresh),
+        getAllProfiles(forceRefresh),
+      ]);
       const tasksWithProfiles = tasksData.map((t) => ({
         ...t,
         profiles: profilesData.find((p) => p.id === t.user_id),
@@ -323,7 +326,7 @@ export default function AllTasksPage() {
               </div>
               <button
                 type="button"
-                onClick={() => fetchAllData()}
+                onClick={() => fetchAllData(true)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-secondary text-white rounded-xl text-xs font-bold shadow-md shadow-primary/10 transition-all transform active:scale-95"
               >
                 <span className="material-symbols-outlined text-[18px]">refresh</span>

@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 export const firebaseConfig = {
@@ -19,7 +19,23 @@ export const isFirebaseConfigured = () => {
 // Initialize Primary Firebase App
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// تهيئة Firestore مع تفعيل Long Polling القسري في المتصفح لمنع تعليق اتصالات WebChannel عبر الجدران النارية والبروكسي
+let firestoreDb;
+try {
+  if (typeof window !== 'undefined') {
+    firestoreDb = initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    });
+  } else {
+    firestoreDb = getFirestore(app);
+  }
+} catch (e) {
+  firestoreDb = getFirestore(app);
+}
+
+export const db = firestoreDb;
+
 export const storage = getStorage(app);
 
 if (typeof window !== 'undefined') {

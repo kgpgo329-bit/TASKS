@@ -27,9 +27,19 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(() => {
+    return auth.currentUser || null;
+  });
+  const [profile, setProfile] = useState<Profile | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('mahamee_cached_profile');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState<boolean>(true);
 
   // جلب مستند المستخدم من Firestore والتحقق من صلاحياته
   const fetchUserProfile = async (
@@ -37,9 +47,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   ): Promise<{ profile: Profile | null; error?: string }> => {
     try {
       const userProfile = await getProfile(uid);
+      if (userProfile && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('mahamee_cached_profile', JSON.stringify(userProfile));
+        } catch {}
+      }
       return { profile: userProfile };
     } catch (err: any) {
       console.warn('Warning fetching user document from Firestore:', err?.message || err);
+      // كخيار احتياطي في حال بطء الشبكة، قراءة البروفايل المحفوظ محلياً
+      if (typeof window !== 'undefined') {
+        try {
+          const saved = localStorage.getItem('mahamee_cached_profile');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed && (parsed.id === uid || parsed.email)) {
+              return { profile: parsed };
+            }
+          }
+        } catch {}
+      }
       return { profile: null, error: err?.message || 'Network error' };
     }
   };
@@ -190,6 +217,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // نجاح تسجيل الدخول واعتماد الصلاحيات
       setUser(credential.user);
       setProfile(userProfile);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('mahamee_cached_profile', JSON.stringify(userProfile));
+        } catch {}
+      }
       return { role: userProfile.role };
     } catch (err: any) {
       console.error('[Firebase Auth Error Code]:', err?.code);
@@ -220,6 +252,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.removeItem('mahamee_demo_user');
         localStorage.removeItem('mahamee_demo_tasks');
         localStorage.removeItem('mahamee_demo_employees');
+        localStorage.removeItem('mahamee_cached_profile');
         window.location.href = '/login';
       }
     }

@@ -27,12 +27,15 @@ export default function DashboardPage() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (forceRefresh = false) => {
     setLoading(true);
     setFetchError(null);
 
     try {
-      const [tasksData, profilesData] = await Promise.all([getAllTasks(), getAllProfiles()]);
+      const [tasksData, profilesData] = await Promise.all([
+        getAllTasks(forceRefresh),
+        getAllProfiles(forceRefresh),
+      ]);
       const tasksWithProfiles = tasksData.map((t) => ({
         ...t,
         profiles: profilesData.find((e) => e.id === t.user_id) || t.profiles,
@@ -117,7 +120,7 @@ export default function DashboardPage() {
               </div>
               <button
                 type="button"
-                onClick={() => fetchDashboardData()}
+                onClick={() => fetchDashboardData(true)}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary text-white rounded-xl text-xs font-bold hover:bg-secondary transition-colors shadow-sm"
               >
                 <span className="material-symbols-outlined text-[16px]">refresh</span>

@@ -97,15 +97,33 @@ export async function setProfile(profile: Profile): Promise<void> {
     setDoc(userRef, profile, { merge: true }),
     setDoc(profRef, profile, { merge: true }),
   ]);
+  invalidateCache();
 }
 
-export async function getAllProfiles(): Promise<Profile[]> {
+// ذاكرة تخزين مؤقتة سريعة في الذاكرة لتفادي استنزاف الاتصال والتجميد أثناء التنقل السريع بين الصفحات
+let _cachedProfiles: { data: Profile[]; time: number } | null = null;
+let _cachedTasks: { data: Task[]; time: number } | null = null;
+let _cachedUserTasks: Record<string, { data: Task[]; time: number }> = {};
+const CACHE_TTL = 30000; // 30 ثانية
+
+export function invalidateCache() {
+  _cachedProfiles = null;
+  _cachedTasks = null;
+  _cachedUserTasks = {};
+}
+
+export async function getAllProfiles(forceRefresh = false): Promise<Profile[]> {
+  if (!forceRefresh && _cachedProfiles && Date.now() - _cachedProfiles.time < CACHE_TTL) {
+    return _cachedProfiles.data;
+  }
+
   return withTimeout(
     (async () => {
       const usersCol = collection(db, 'users');
       const userSnap = await getDocs(usersCol);
+      let list: Profile[] = [];
       if (!userSnap.empty) {
-        return userSnap.docs.map((d) => {
+        list = userSnap.docs.map((d) => {
           const data = d.data();
           return {
             id: d.id,
@@ -117,22 +135,25 @@ export async function getAllProfiles(): Promise<Profile[]> {
             updated_at: data.updated_at || data.updatedAt || new Date().toISOString(),
           };
         });
+      } else {
+        const profCol = collection(db, 'profiles');
+        const profSnap = await getDocs(profCol);
+        list = profSnap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
+            email: data.email || '',
+            role: data.role as UserRole,
+            is_active: data.is_active !== undefined ? data.is_active : true,
+            created_at: data.created_at || new Date().toISOString(),
+            updated_at: data.updated_at || new Date().toISOString(),
+          };
+        });
       }
 
-      const profCol = collection(db, 'profiles');
-      const profSnap = await getDocs(profCol);
-      return profSnap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
-          email: data.email || '',
-          role: data.role as UserRole,
-          is_active: data.is_active !== undefined ? data.is_active : true,
-          created_at: data.created_at || new Date().toISOString(),
-          updated_at: data.updated_at || new Date().toISOString(),
-        };
-      });
+      _cachedProfiles = { data: list, time: Date.now() };
+      return list;
     })(),
     10000,
     'تعذر جلب قائمة الموظفات: انتهت مهلة الاتصال'
@@ -150,6 +171,7 @@ export async function updateProfile(userId: string, data: Partial<Profile>): Pro
     setDoc(userRef, updatedData, { merge: true }),
     setDoc(profRef, updatedData, { merge: true }),
   ]);
+  invalidateCache();
 }
 
 export async function deleteProfile(userId: string): Promise<void> {
@@ -166,6 +188,7 @@ export async function deleteProfile(userId: string): Promise<void> {
   const snap = await getDocs(q);
   const deletePromises = snap.docs.map((d) => deleteDoc(d.ref));
   await Promise.all(deletePromises);
+  invalidateCache();
 }
 
 // ==============================================================================
@@ -197,27 +220,44 @@ export async function getTask(taskId: string): Promise<Task | null> {
   );
 }
 
-export async function getUserTasks(userId: string): Promise<Task[]> {
+export async function getUserTasks(userId: string, forceRefresh = false): Promise<Task[]> {
+  if (!forceRefresh && _cachedUserTasks[userId] && Date.now() - _cachedUserTasks[userId].time < CACHE_TTL) {
+    return _cachedUserTasks[userId].data;
+  }
+  if (!forceRefresh && _cachedTasks && Date.now() - _cachedTasks.time < CACHE_TTL) {
+    const filtered = _cachedTasks.data.filter((t) => t.user_id === userId);
+    _cachedUserTasks[userId] = { data: filtered, time: _cachedTasks.time };
+    return filtered;
+  }
+
   return withTimeout(
     (async () => {
       const tasksCol = collection(db, 'tasks');
       const q = query(tasksCol, where('user_id', '==', userId));
       const snap = await getDocs(q);
       const list = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Task));
-      return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const sorted = list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      _cachedUserTasks[userId] = { data: sorted, time: Date.now() };
+      return sorted;
     })(),
     10000,
     'تعذر جلب قائمة المهام الخاصة: انتهت مهلة الاتصال'
   );
 }
 
-export async function getAllTasks(): Promise<Task[]> {
+export async function getAllTasks(forceRefresh = false): Promise<Task[]> {
+  if (!forceRefresh && _cachedTasks && Date.now() - _cachedTasks.time < CACHE_TTL) {
+    return _cachedTasks.data;
+  }
+
   return withTimeout(
     (async () => {
       const tasksCol = collection(db, 'tasks');
       const snap = await getDocs(tasksCol);
       const list = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Task));
-      return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const sorted = list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      _cachedTasks = { data: sorted, time: Date.now() };
+      return sorted;
     })(),
     10000,
     'تعذر جلب جميع المهام: انتهت مهلة الاتصال'
@@ -291,6 +331,8 @@ export async function createTask(
     }
   }
 
+  invalidateCache();
+
   return {
     ...payload,
     id: taskId,
@@ -319,11 +361,14 @@ export async function updateTask(
       details: `تم تعديل بيانات المهمة بواسطة ${actor.name}`,
     });
   }
+
+  invalidateCache();
 }
 
 export async function deleteTask(taskId: string): Promise<void> {
   const docRef = doc(db, 'tasks', taskId);
   await deleteDoc(docRef);
+  invalidateCache();
 }
 
 // ==============================================================================
@@ -399,6 +444,7 @@ export async function updateTaskStatusWithProof(
   }
 
   await updateDoc(docRef, updatePayload);
+  invalidateCache();
 
   const statusName = TASK_STATUS_LABELS[newStatus] || newStatus;
   const isCompletion = newStatus === 'completed';

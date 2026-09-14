@@ -30,13 +30,16 @@ export default function MyTasksPage() {
   const currentUserId = user?.uid || (user as any)?.id;
 
   // جلب مهام المستخدم الحالي فقط من Firestore
-  const fetchMyTasks = async () => {
-    if (!currentUserId) return;
+  const fetchMyTasks = async (forceRefresh = false) => {
+    if (!currentUserId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setFetchError(null);
 
     try {
-      const myTasks = await getUserTasks(currentUserId);
+      const myTasks = await getUserTasks(currentUserId, forceRefresh);
       setTasks(myTasks);
     } catch (err: any) {
       console.error('Exception fetching tasks:', err);
@@ -48,7 +51,7 @@ export default function MyTasksPage() {
 
   useEffect(() => {
     fetchMyTasks();
-  }, [user]);
+  }, [currentUserId]);
 
   // تغيير حالة المهمة
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {

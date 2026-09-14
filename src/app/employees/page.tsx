@@ -27,13 +27,16 @@ export default function EmployeesPage() {
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = async (forceRefresh = false) => {
     setLoading(true);
     setFetchError(null);
     setActionError('');
 
     try {
-      const [profilesData, tasksData] = await Promise.all([getAllProfiles(), getAllTasks()]);
+      const [profilesData, tasksData] = await Promise.all([
+        getAllProfiles(forceRefresh),
+        getAllTasks(forceRefresh),
+      ]);
       const empsWithStats: EmployeeWithStats[] = profilesData.map((emp) => {
         const empTasks = tasksData.filter((t) => t.user_id === emp.id);
         return {
@@ -243,7 +246,7 @@ export default function EmployeesPage() {
               </div>
               <button
                 type="button"
-                onClick={() => fetchEmployees()}
+                onClick={() => fetchEmployees(true)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-secondary text-white rounded-xl text-xs font-bold shadow-md shadow-primary/10 transition-all transform active:scale-95"
               >
                 <span className="material-symbols-outlined text-[18px]">refresh</span>

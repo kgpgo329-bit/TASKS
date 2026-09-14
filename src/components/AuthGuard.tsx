@@ -20,15 +20,18 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireRole }) =
     if (!loading) {
       if (!user) {
         router.replace('/login');
-      } else if (requireRole === 'manager' && profile && !isManager) {
-        // إذا حاولت موظفة دخول صفحة مخصصة للمديرة بعد التأكد من جلب بيانات الملف
+      } else if (!profile) {
+        // انتهى التحميل ولم يتم العثور على مستند المستخدم
+        router.replace('/login');
+      } else if (requireRole === 'manager' && !isManager) {
+        // إذا حاولت موظفة دخول صفحة مخصصة للمديرة
         router.replace('/my-tasks');
       }
     }
   }, [user, profile, loading, requireRole, isManager, router]);
 
-  // ننتظر حتى تكتمل قراءة بيانات المستخدم وصلاحياته تماماً
-  if (loading || (user && !profile)) {
+  // حالة التحميل أثناء فحص الجلسة فقط
+  if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <Logo size={56} showText={true} />
@@ -40,7 +43,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireRole }) =
     );
   }
 
-  if (!user) {
+  if (!user || !profile) {
     return null;
   }
 
