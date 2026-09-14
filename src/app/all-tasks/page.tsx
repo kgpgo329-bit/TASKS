@@ -6,11 +6,14 @@ import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { TaskCard } from '@/components/TaskCard';
 import { TaskModal } from '@/components/TaskModal';
+import { TaskDetailsModal } from '@/components/TaskDetailsModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAllTasks, getAllProfiles, updateTask, createTask, deleteTask } from '@/lib/firebase/db';
-import { Task, TaskStatus, TaskPriority, Profile } from '@/lib/firebase/types';
+import { getAllTasks, getAllProfiles, updateTask, createTask, deleteTask, getTask } from '@/lib/firebase/db';
+import { uploadTaskFile } from '@/lib/firebase/storage';
+import { Task, TaskStatus, TaskPriority, Profile, TaskAttachment } from '@/lib/firebase/types';
+
 export default function AllTasksPage() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +25,8 @@ export default function AllTasksPage() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+  const [detailsTask, setDetailsTask] = useState<Task | null>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -61,32 +66,61 @@ export default function AllTasksPage() {
   const handleSaveTask = async (taskData: {
     title: string;
     description: string;
+    manager_note?: string;
     status: TaskStatus;
     priority: TaskPriority;
     due_date: string | null;
     category: string;
     user_id?: string;
+    selectedFiles?: File[];
   }) => {
+    const currentActor = {
+      id: user?.uid || profile?.id || '',
+      name: profile?.name || 'المديرة',
+      role: 'manager' as const,
+    };
+
     if (editingTask) {
-      await updateTask(editingTask.id, {
-        title: taskData.title,
-        description: taskData.description,
-        status: taskData.status,
-        priority: taskData.priority,
-        due_date: taskData.due_date,
-        category: taskData.category,
-        user_id: taskData.user_id || editingTask.user_id,
-      });
+      await updateTask(
+        editingTask.id,
+        {
+          title: taskData.title,
+          description: taskData.description,
+          manager_note: taskData.manager_note,
+          status: taskData.status,
+          priority: taskData.priority,
+          due_date: taskData.due_date,
+          category: taskData.category,
+          user_id: taskData.user_id || editingTask.user_id,
+        },
+        currentActor
+      );
     } else {
-      await createTask({
-        title: taskData.title,
-        description: taskData.description,
-        status: taskData.status,
-        priority: taskData.priority,
-        due_date: taskData.due_date,
-        category: taskData.category,
-        user_id: taskData.user_id || profile?.id || '',
-      });
+      const uploadedAttachments: TaskAttachment[] = [];
+      const tempTaskId = `task-${Date.now()}`;
+      if (taskData.selectedFiles && taskData.selectedFiles.length > 0) {
+        for (const file of taskData.selectedFiles) {
+          const att = await uploadTaskFile(tempTaskId, file, currentActor);
+          uploadedAttachments.push(att);
+        }
+      }
+
+      await createTask(
+        {
+          title: taskData.title,
+          description: taskData.description,
+          manager_note: taskData.manager_note,
+          status: taskData.status,
+          priority: taskData.priority,
+          due_date: taskData.due_date,
+          category: taskData.category,
+          user_id: taskData.user_id || profile?.id || '',
+          created_by: currentActor.id,
+          creator_name: currentActor.name,
+          attachments: uploadedAttachments,
+        },
+        currentActor
+      );
     }
     fetchAllData();
   };
@@ -152,6 +186,19 @@ export default function AllTasksPage() {
           onOpenNewTaskModal={() => {
             setEditingTask(null);
             setIsTaskModalOpen(true);
+          }}
+          onSelectTask={async (taskId) => {
+            const found = tasks.find((t) => t.id === taskId);
+            if (found) {
+              setDetailsTask(found);
+              setIsDetailsModalOpen(true);
+            } else {
+              const t = await getTask(taskId);
+              if (t) {
+                setDetailsTask(t);
+                setIsDetailsModalOpen(true);
+              }
+            }
           }}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -279,6 +326,10 @@ export default function AllTasksPage() {
                     setIsTaskModalOpen(true);
                   }}
                   onDelete={(id) => setTaskToDelete(id)}
+                  onOpenDetails={(t) => {
+                    setDetailsTask(t);
+                    setIsDetailsModalOpen(true);
+                  }}
                 />
               ))}
             </div>
@@ -292,6 +343,28 @@ export default function AllTasksPage() {
           initialTask={editingTask}
           employeesList={employees}
           isManager={true}
+        />
+
+        {/* مركز تفاصيل المهمة المتكامل */}
+        <TaskDetailsModal
+          isOpen={isDetailsModalOpen}
+          onClose={() => {
+            setIsDetailsModalOpen(false);
+            setDetailsTask(null);
+          }}
+          task={detailsTask}
+          employeesList={employees}
+          onTaskUpdated={() => {
+            fetchAllData();
+          }}
+          onEditTask={(task) => {
+            setEditingTask(task);
+            setIsTaskModalOpen(true);
+          }}
+          onDeleteTask={async (taskId) => {
+            await deleteTask(taskId);
+            fetchAllData();
+          }}
         />
 
         {taskToDelete && (

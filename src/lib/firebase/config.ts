@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyDDLRO_H5_HgUUsCnhK1A-6DWgnOGkD0BY",
@@ -19,6 +20,7 @@ export const isFirebaseConfigured = () => {
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 
 if (typeof window !== 'undefined') {
   console.log('[Firebase Initialization]', {

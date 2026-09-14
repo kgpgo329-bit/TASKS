@@ -2,11 +2,13 @@
 
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { NotificationDropdown } from '@/components/NotificationDropdown';
 
 interface HeaderProps {
   onOpenMobileMenu?: () => void;
   onOpenNewTaskModal?: () => void;
   onOpenAddEmployeeModal?: () => void;
+  onSelectTask?: (taskId: string) => void;
   searchQuery?: string;
   onSearchChange?: (val: string) => void;
   title?: string;
@@ -16,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMobileMenu,
   onOpenNewTaskModal,
   onOpenAddEmployeeModal,
+  onSelectTask,
   searchQuery = '',
   onSearchChange,
   title,
@@ -63,12 +66,15 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* الجانب الأيسر: التاريخ والأزرار التفاعلية */}
-      <div className="flex items-center gap-2 lg:gap-space-lg">
+      <div className="flex items-center gap-2 lg:gap-3">
         {/* شارة التاريخ */}
         <div className="hidden xl:flex items-center gap-space-xs text-on-surface-variant text-xs font-medium bg-surface-container-low px-space-md py-space-xs rounded-full">
           <span className="material-symbols-outlined text-[18px] text-secondary">calendar_today</span>
           <span>{todayDate}</span>
         </div>
+
+        {/* قائمة الإشعارات اللحظية */}
+        <NotificationDropdown onSelectTask={onSelectTask} />
 
         {/* زر إضافة موظف جديد للمديرة */}
         {onOpenAddEmployeeModal && isManager && (

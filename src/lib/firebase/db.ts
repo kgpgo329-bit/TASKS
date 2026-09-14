@@ -10,9 +10,23 @@ import {
   where,
   orderBy,
   addDoc,
+  onSnapshot,
+  arrayUnion,
+  limit,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from './config';
-import { Profile, Task, UserRole } from './types';
+import {
+  Profile,
+  Task,
+  UserRole,
+  TaskAttachment,
+  TaskMessage,
+  TaskActivity,
+  AppNotification,
+  TaskStatus,
+  ActivityType,
+} from './types';
 
 // ==============================================================================
 // Profiles (المستخدمات / الموظفات)
@@ -129,15 +143,33 @@ export async function deleteProfile(userId: string): Promise<void> {
 }
 
 // ==============================================================================
+// Helper Labels
+// ==============================================================================
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  not_started: 'جديدة',
+  in_progress: 'قيد التنفيذ',
+  under_review: 'بانتظار المراجعة',
+  completed: 'مكتملة',
+  cancelled: 'ملغاة',
+};
+
+// ==============================================================================
 // Tasks (المهام)
 // ==============================================================================
+
+export async function getTask(taskId: string): Promise<Task | null> {
+  const docRef = doc(db, 'tasks', taskId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return null;
+  return { ...snap.data(), id: snap.id } as Task;
+}
 
 export async function getUserTasks(userId: string): Promise<Task[]> {
   const tasksCol = collection(db, 'tasks');
   const q = query(tasksCol, where('user_id', '==', userId));
   const snap = await getDocs(q);
   const list = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Task));
-  // فرز حسب تاريخ الإنشاء تنازلياً
   return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
 
@@ -148,32 +180,418 @@ export async function getAllTasks(): Promise<Task[]> {
   return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
 
-export async function createTask(taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Promise<Task> {
+export async function createTask(
+  taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>,
+  actor?: { id: string; name: string; role: UserRole }
+): Promise<Task> {
   const tasksCol = collection(db, 'tasks');
   const now = new Date().toISOString();
-  const docRef = await addDoc(tasksCol, {
+  const payload = {
     ...taskData,
-    created_at: now,
-    updated_at: now,
-  });
-
-  return {
-    ...taskData,
-    id: docRef.id,
+    status: taskData.status || 'not_started',
+    is_locked: taskData.is_locked !== undefined ? taskData.is_locked : true,
+    attachments: taskData.attachments || [],
     created_at: now,
     updated_at: now,
   };
+
+  const docRef = await addDoc(tasksCol, payload);
+  const taskId = docRef.id;
+
+  // تسجيل النشاط الأولي: إنشاء المهمة
+  if (actor) {
+    await logTaskActivity(taskId, {
+      task_id: taskId,
+      user_id: actor.id,
+      user_name: actor.name,
+      user_role: actor.role,
+      type: 'task_created',
+      details: `تم إنشاء المهمة: "${taskData.title}"`,
+    });
+
+    if (taskData.user_id && taskData.user_id !== actor.id) {
+      // تسجيل نشاط الإسناد
+      await logTaskActivity(taskId, {
+        task_id: taskId,
+        user_id: actor.id,
+        user_name: actor.name,
+        user_role: actor.role,
+        type: 'task_assigned',
+        details: `تم إرسال وتكليف المهمة للموظفة`,
+      });
+
+      // إرسال إشعار للموظفة المكلفة
+      await createNotification({
+        user_id: taskData.user_id,
+        actor_id: actor.id,
+        actor_name: actor.name,
+        task_id: taskId,
+        task_title: taskData.title,
+        type: 'new_task',
+        title: 'مهمة جديدة أُسندت إليك',
+        message: `أرسلت لك ${actor.name} مهمة: "${taskData.title}"`,
+        is_read: false,
+      });
+    }
+
+    // إذا كانت هناك مرفقات مبدئية مسجلة
+    if (taskData.attachments && taskData.attachments.length > 0) {
+      await logTaskActivity(taskId, {
+        task_id: taskId,
+        user_id: actor.id,
+        user_name: actor.name,
+        user_role: actor.role,
+        type: 'attachment_added',
+        details: `تم إرفاق ${taskData.attachments.length} ملف/صورة مع المهمة`,
+      });
+    }
+  }
+
+  return {
+    ...payload,
+    id: taskId,
+  };
 }
 
-export async function updateTask(taskId: string, data: Partial<Task>): Promise<void> {
+export async function updateTask(
+  taskId: string,
+  data: Partial<Task>,
+  actor?: { id: string; name: string; role: UserRole }
+): Promise<void> {
   const docRef = doc(db, 'tasks', taskId);
+  const now = new Date().toISOString();
   await updateDoc(docRef, {
     ...data,
-    updated_at: new Date().toISOString(),
+    updated_at: now,
   });
+
+  if (actor) {
+    await logTaskActivity(taskId, {
+      task_id: taskId,
+      user_id: actor.id,
+      user_name: actor.name,
+      user_role: actor.role,
+      type: 'task_updated',
+      details: `تم تعديل بيانات المهمة بواسطة ${actor.name}`,
+    });
+  }
 }
 
 export async function deleteTask(taskId: string): Promise<void> {
   const docRef = doc(db, 'tasks', taskId);
   await deleteDoc(docRef);
 }
+
+// ==============================================================================
+// Task Attachments & Execution Proofs (المرفقات وإثباتات التنفيذ)
+// ==============================================================================
+
+export async function addAttachmentToTask(
+  taskId: string,
+  attachment: TaskAttachment,
+  actor: { id: string; name: string; role: UserRole },
+  taskTitle: string,
+  recipientUserId?: string
+): Promise<void> {
+  const docRef = doc(db, 'tasks', taskId);
+  const now = new Date().toISOString();
+
+  await updateDoc(docRef, {
+    attachments: arrayUnion(attachment),
+    updated_at: now,
+  });
+
+  // تسجيل النشاط
+  await logTaskActivity(taskId, {
+    task_id: taskId,
+    user_id: actor.id,
+    user_name: actor.name,
+    user_role: actor.role,
+    type: 'attachment_added',
+    details: `أرفق ملفاً: "${attachment.name}"`,
+  });
+
+  // إرسال إشعار للطرف الآخر إن وجد
+  if (recipientUserId && recipientUserId !== actor.id) {
+    await createNotification({
+      user_id: recipientUserId,
+      actor_id: actor.id,
+      actor_name: actor.name,
+      task_id: taskId,
+      task_title: taskTitle,
+      type: 'attachment_added',
+      title: 'مرفق جديد في المهمة',
+      message: `أضافت ${actor.name} مرفقاً جديداً: "${attachment.name}"`,
+      is_read: false,
+    });
+  }
+}
+
+export async function updateTaskStatusWithProof(
+  taskId: string,
+  newStatus: TaskStatus,
+  actor: { id: string; name: string; role: UserRole },
+  taskTitle: string,
+  options?: {
+    employeeNote?: string;
+    newAttachments?: TaskAttachment[];
+    recipientUserId?: string;
+  }
+): Promise<void> {
+  const docRef = doc(db, 'tasks', taskId);
+  const now = new Date().toISOString();
+
+  const updatePayload: Record<string, any> = {
+    status: newStatus,
+    updated_at: now,
+  };
+
+  if (options?.employeeNote !== undefined) {
+    updatePayload.employee_note = options.employeeNote;
+  }
+
+  if (options?.newAttachments && options.newAttachments.length > 0) {
+    updatePayload.attachments = arrayUnion(...options.newAttachments);
+  }
+
+  await updateDoc(docRef, updatePayload);
+
+  const statusName = TASK_STATUS_LABELS[newStatus] || newStatus;
+  const isCompletion = newStatus === 'completed';
+
+  // تسجيل نشاط تغيير الحالة
+  await logTaskActivity(taskId, {
+    task_id: taskId,
+    user_id: actor.id,
+    user_name: actor.name,
+    user_role: actor.role,
+    type: isCompletion ? 'task_completed' : 'status_changed',
+    details: `تم تغيير حالة المهمة إلى "${statusName}"${
+      options?.employeeNote ? ` (ملاحظة: ${options.employeeNote})` : ''
+    }`,
+  });
+
+  // إرسال إشعار للطرف الآخر
+  if (options?.recipientUserId && options.recipientUserId !== actor.id) {
+    await createNotification({
+      user_id: options.recipientUserId,
+      actor_id: actor.id,
+      actor_name: actor.name,
+      task_id: taskId,
+      task_title: taskTitle,
+      type: 'status_changed',
+      title: isCompletion ? 'تم إنجاز المهمة' : 'تحديث حالة المهمة',
+      message: `قامت ${actor.name} بتحديث حالة "${taskTitle}" إلى: ${statusName}`,
+      is_read: false,
+    });
+  }
+}
+
+// ==============================================================================
+// Task Messages (المحادثة اللحظية المرتبطة بالمهمة)
+// ==============================================================================
+
+export function subscribeToTaskMessages(
+  taskId: string,
+  onUpdate: (messages: TaskMessage[]) => void
+): () => void {
+  const messagesCol = collection(db, 'tasks', taskId, 'messages');
+  const q = query(messagesCol, orderBy('created_at', 'asc'));
+
+  return onSnapshot(
+    q,
+    (snap) => {
+      const msgs = snap.docs.map((d) => ({ ...d.data(), id: d.id } as TaskMessage));
+      onUpdate(msgs);
+    },
+    (err) => {
+      console.error('Error in subscribeToTaskMessages:', err);
+    }
+  );
+}
+
+export async function sendTaskMessage(
+  taskId: string,
+  messageData: Omit<TaskMessage, 'id' | 'created_at'>,
+  taskTitle: string,
+  recipientUserId?: string
+): Promise<TaskMessage> {
+  const messagesCol = collection(db, 'tasks', taskId, 'messages');
+  const now = new Date().toISOString();
+
+  const payload = {
+    ...messageData,
+    created_at: now,
+  };
+
+  const docRef = await addDoc(messagesCol, payload);
+
+  // تحديث تاريخ تعديل المهمة لفرز المهام النشطة
+  await updateDoc(doc(db, 'tasks', taskId), {
+    updated_at: now,
+  }).catch(() => {});
+
+  // تسجيل النشاط
+  await logTaskActivity(taskId, {
+    task_id: taskId,
+    user_id: messageData.sender_id,
+    user_name: messageData.sender_name,
+    user_role: messageData.sender_role,
+    type: 'message_sent',
+    details: `أرسلت رسالة في محادثة المهمة`,
+  });
+
+  // إرسال إشعار فوري للطرف الآخر
+  if (recipientUserId && recipientUserId !== messageData.sender_id) {
+    await createNotification({
+      user_id: recipientUserId,
+      actor_id: messageData.sender_id,
+      actor_name: messageData.sender_name,
+      task_id: taskId,
+      task_title: taskTitle,
+      type: 'new_message',
+      title: 'رسالة جديدة في المهمة',
+      message: `${messageData.sender_name}: "${messageData.content.substring(0, 60)}${
+        messageData.content.length > 60 ? '...' : ''
+      }"`,
+      is_read: false,
+    });
+  }
+
+  return {
+    ...payload,
+    id: docRef.id,
+  };
+}
+
+export async function markTaskMessagesAsRead(taskId: string, userId: string): Promise<void> {
+  try {
+    const messagesCol = collection(db, 'tasks', taskId, 'messages');
+    const snap = await getDocs(messagesCol);
+    const updates = snap.docs
+      .filter((d) => {
+        const data = d.data();
+        return data.sender_id !== userId && (!data.read_by || !data.read_by.includes(userId));
+      })
+      .map((d) =>
+        updateDoc(d.ref, {
+          read_by: arrayUnion(userId),
+        })
+      );
+
+    await Promise.allSettled(updates);
+  } catch (err) {
+    console.error('Error marking messages as read:', err);
+  }
+}
+
+// ==============================================================================
+// Task Activity Logs (سجل نشاط المهمة)
+// ==============================================================================
+
+export function subscribeToTaskActivities(
+  taskId: string,
+  onUpdate: (activities: TaskActivity[]) => void
+): () => void {
+  const activitiesCol = collection(db, 'tasks', taskId, 'activities');
+  const q = query(activitiesCol, orderBy('created_at', 'desc'));
+
+  return onSnapshot(
+    q,
+    (snap) => {
+      const acts = snap.docs.map((d) => ({ ...d.data(), id: d.id } as TaskActivity));
+      onUpdate(acts);
+    },
+    (err) => {
+      console.error('Error in subscribeToTaskActivities:', err);
+    }
+  );
+}
+
+export async function logTaskActivity(
+  taskId: string,
+  activityData: Omit<TaskActivity, 'id' | 'created_at'>
+): Promise<void> {
+  try {
+    const activitiesCol = collection(db, 'tasks', taskId, 'activities');
+    const now = new Date().toISOString();
+    await addDoc(activitiesCol, {
+      ...activityData,
+      created_at: now,
+    });
+  } catch (err) {
+    console.error('Error logging task activity:', err);
+  }
+}
+
+// ==============================================================================
+// Notifications (الإشعارات الداخلية)
+// ==============================================================================
+
+export function subscribeToUserNotifications(
+  userId: string,
+  onUpdate: (notifications: AppNotification[]) => void
+): () => void {
+  const notifsCol = collection(db, 'notifications');
+  const q = query(
+    notifsCol,
+    where('user_id', '==', userId),
+    orderBy('created_at', 'desc'),
+    limit(30)
+  );
+
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map((d) => ({ ...d.data(), id: d.id } as AppNotification));
+      onUpdate(list);
+    },
+    (err) => {
+      console.error('Error in subscribeToUserNotifications:', err);
+    }
+  );
+}
+
+export async function createNotification(
+  data: Omit<AppNotification, 'id' | 'created_at'>
+): Promise<void> {
+  try {
+    const notifsCol = collection(db, 'notifications');
+    const now = new Date().toISOString();
+    await addDoc(notifsCol, {
+      ...data,
+      created_at: now,
+    });
+  } catch (err) {
+    console.error('Error creating notification:', err);
+  }
+}
+
+export async function markNotificationAsRead(notificationId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'notifications', notificationId);
+    await updateDoc(docRef, { is_read: true });
+  } catch (err) {
+    console.error('Error marking notification as read:', err);
+  }
+}
+
+export async function markAllNotificationsAsRead(userId: string): Promise<void> {
+  try {
+    const notifsCol = collection(db, 'notifications');
+    const q = query(
+      notifsCol,
+      where('user_id', '==', userId),
+      where('is_read', '==', false)
+    );
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.docs.forEach((d) => {
+      batch.update(d.ref, { is_read: true });
+    });
+    await batch.commit();
+  } catch (err) {
+    console.error('Error marking all notifications as read:', err);
+  }
+}
+

@@ -7,12 +7,15 @@ import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { TaskCard } from '@/components/TaskCard';
 import { TaskModal } from '@/components/TaskModal';
+import { TaskDetailsModal } from '@/components/TaskDetailsModal';
 import { AddEmployeeModal } from '@/components/AddEmployeeModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAllTasks, getAllProfiles, updateTask, deleteTask, createTask } from '@/lib/firebase/db';
-import { Task, TaskStatus, Profile } from '@/lib/firebase/types';
+import { getAllTasks, getAllProfiles, updateTask, deleteTask, createTask, getTask } from '@/lib/firebase/db';
+import { uploadTaskFile } from '@/lib/firebase/storage';
+import { Task, TaskStatus, Profile, TaskAttachment } from '@/lib/firebase/types';
+
 export default function DashboardPage() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +23,8 @@ export default function DashboardPage() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [detailsTask, setDetailsTask] = useState<Task | null>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -83,6 +88,19 @@ export default function DashboardPage() {
             setIsTaskModalOpen(true);
           }}
           onOpenAddEmployeeModal={() => setIsAddEmployeeModalOpen(true)}
+          onSelectTask={async (taskId) => {
+            const found = tasks.find((t) => t.id === taskId);
+            if (found) {
+              setDetailsTask(found);
+              setIsDetailsModalOpen(true);
+            } else {
+              const t = await getTask(taskId);
+              if (t) {
+                setDetailsTask(t);
+                setIsDetailsModalOpen(true);
+              }
+            }
+          }}
           title="لوحة المتابعة الإدارية"
         />
 
@@ -237,16 +255,20 @@ export default function DashboardPage() {
                         await deleteTask(taskId);
                         fetchDashboardData();
                       }}
+                      onOpenDetails={(task) => {
+                        setDetailsTask(task);
+                        setIsDetailsModalOpen(true);
+                      }}
                     />
                   ))}
                 </div>
               )}
             </div>
 
-            {/* العمود الأيسر: إدارة الموظفات السريعة والتقويم */}
+            {/* الجانب الأيسر: إحصائيات الموظفات السريعة */}
             <div className="flex flex-col gap-4">
               <div className="bg-surface-container-lowest rounded-2xl p-5 border border-surface-variant/40 shadow-sm flex flex-col gap-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between pb-2 border-b border-surface-variant/30">
                   <h3 className="text-sm font-bold text-primary">إحصائيات الموظفات</h3>
                   <Link
                     href="/employees"
@@ -317,32 +339,81 @@ export default function DashboardPage() {
           isOpen={isTaskModalOpen}
           onClose={() => setIsTaskModalOpen(false)}
           onSave={async (taskData) => {
+            const currentActor = {
+              id: user?.uid || profile?.id || '',
+              name: profile?.name || 'المديرة',
+              role: 'manager' as const,
+            };
+
             if (selectedTask) {
-              await updateTask(selectedTask.id, {
-                title: taskData.title,
-                description: taskData.description,
-                status: taskData.status,
-                priority: taskData.priority,
-                due_date: taskData.due_date,
-                category: taskData.category,
-                user_id: taskData.user_id || selectedTask.user_id,
-              });
+              await updateTask(
+                selectedTask.id,
+                {
+                  title: taskData.title,
+                  description: taskData.description,
+                  manager_note: taskData.manager_note,
+                  status: taskData.status,
+                  priority: taskData.priority,
+                  due_date: taskData.due_date,
+                  category: taskData.category,
+                  user_id: taskData.user_id || selectedTask.user_id,
+                },
+                currentActor
+              );
             } else {
-              await createTask({
-                title: taskData.title,
-                description: taskData.description,
-                status: taskData.status,
-                priority: taskData.priority,
-                due_date: taskData.due_date,
-                category: taskData.category,
-                user_id: taskData.user_id || profile?.id || '',
-              });
+              const uploadedAttachments: TaskAttachment[] = [];
+              const tempTaskId = `task-${Date.now()}`;
+              if (taskData.selectedFiles && taskData.selectedFiles.length > 0) {
+                for (const file of taskData.selectedFiles) {
+                  const att = await uploadTaskFile(tempTaskId, file, currentActor);
+                  uploadedAttachments.push(att);
+                }
+              }
+
+              await createTask(
+                {
+                  title: taskData.title,
+                  description: taskData.description,
+                  manager_note: taskData.manager_note,
+                  status: taskData.status,
+                  priority: taskData.priority,
+                  due_date: taskData.due_date,
+                  category: taskData.category,
+                  user_id: taskData.user_id || profile?.id || '',
+                  created_by: currentActor.id,
+                  creator_name: currentActor.name,
+                  attachments: uploadedAttachments,
+                },
+                currentActor
+              );
             }
             fetchDashboardData();
           }}
           initialTask={selectedTask}
           employeesList={employees}
           isManager={true}
+        />
+
+        {/* مركز تفاصيل المهمة المتكامل */}
+        <TaskDetailsModal
+          isOpen={isDetailsModalOpen}
+          onClose={() => {
+            setIsDetailsModalOpen(false);
+            setDetailsTask(null);
+          }}
+          task={detailsTask}
+          employeesList={employees}
+          onTaskUpdated={() => {
+            fetchDashboardData();
+          }}
+          onEditTask={(task) => {
+            setSelectedTask(task);
+            setIsTaskModalOpen(true);
+          }}
+          onDeleteTask={async (taskId) => {
+            await deleteTask(taskId);
+            fetchDashboardData();
+          }}
         />
 
         {/* نافذة إضافة موظف جديد الحقيقية */}

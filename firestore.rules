@@ -16,6 +16,21 @@ service cloud.firestore {
       return request.auth != null && getUserRole() == 'manager';
     }
 
+    // دالة مساعدة للتحقق من أن المستخدم موظف مسند إليه المهمة
+    function isTaskAssignee(taskData) {
+      return request.auth != null && taskData.user_id == request.auth.uid;
+    }
+
+    // دالة مساعدة لفحص أن الموظفة لم تغير الحقول الأصلية المحمية للمهمة
+    function employeeKeptOriginalFields(existing, incoming) {
+      return incoming.title == existing.title &&
+             incoming.description == existing.description &&
+             incoming.user_id == existing.user_id &&
+             incoming.created_at == existing.created_at &&
+             (!('created_by' in existing) || incoming.created_by == existing.created_by) &&
+             (!('manager_note' in existing) || incoming.manager_note == existing.manager_note);
+    }
+
     // قواعد حماية مجموعة المستخدمين (users/{userId})
     match /users/{userId} {
       allow read: if request.auth != null && (request.auth.uid == userId || isManager());
@@ -32,11 +47,62 @@ service cloud.firestore {
 
     // قواعد حماية المهام (tasks/{taskId})
     match /tasks/{taskId} {
-      // الموظفة تقرأ وتعدل وتحذف مهامها الخاصة فقط
-      // المديرة تقرأ وتعدل وتتحكم في جميع المهام
-      allow read: if request.auth != null && (resource.data.user_id == request.auth.uid || isManager());
-      allow create: if request.auth != null && (request.resource.data.user_id == request.auth.uid || isManager());
-      allow update, delete: if request.auth != null && (resource.data.user_id == request.auth.uid || isManager());
+      // القراءة: المديرة تقرأ كل المهام، الموظفة تقرأ مهامها المسندة إليها فقط
+      allow read: if request.auth != null && (isManager() || resource.data.user_id == request.auth.uid);
+
+      // الإنشاء: المديرة تنشئ المهام وتكلف الموظفات
+      allow create: if request.auth != null && (isManager() || request.resource.data.user_id == request.auth.uid);
+
+      // التعديل:
+      // المديرة تعدل بحرية
+      // الموظفة تعدل فقط إذا كانت المهمة مسندة لها ولم تغير البيانات الأصلية (تعديل الحالة، المرفقات، ملاحظة الإنجاز)
+      allow update: if request.auth != null && (
+        isManager() ||
+        (isTaskAssignee(resource.data) && employeeKeptOriginalFields(resource.data, request.resource.data))
+      );
+
+      // الحذف: محصور تماماً بالمديرة فقط
+      allow delete: if isManager();
+
+      // المحادثات اللحظية داخل المهمة
+      match /messages/{messageId} {
+        allow read: if request.auth != null && (
+          isManager() ||
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.user_id == request.auth.uid
+        );
+        allow create: if request.auth != null && (
+          isManager() ||
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.user_id == request.auth.uid
+        ) && request.resource.data.sender_id == request.auth.uid;
+        allow update: if request.auth != null && (
+          isManager() ||
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.user_id == request.auth.uid
+        );
+        allow delete: if isManager();
+      }
+
+      // سجل النشاط (Activity Log) - لا يمكن حذفه أو التلاعب به
+      match /activities/{activityId} {
+        allow read: if request.auth != null && (
+          isManager() ||
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.user_id == request.auth.uid
+        );
+        allow create: if request.auth != null && (
+          isManager() ||
+          get(/databases/$(database)/documents/tasks/$(taskId)).data.user_id == request.auth.uid
+        );
+        allow update: if false; // ممنوع التعديل قطعياً للحفاظ على سلامة وتاريخ السجل
+        allow delete: if false; // ممنوع الحذف قطعياً للحفاظ على سلامة وتاريخ السجل
+      }
+    }
+
+    // قواعد حماية الإشعارات (notifications/{notificationId})
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && resource.data.user_id == request.auth.uid;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && resource.data.user_id == request.auth.uid;
+      allow delete: if request.auth != null && (resource.data.user_id == request.auth.uid || isManager());
     }
   }
 }
+

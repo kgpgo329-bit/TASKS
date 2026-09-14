@@ -6,11 +6,13 @@ import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { TaskCard } from '@/components/TaskCard';
 import { TaskModal } from '@/components/TaskModal';
+import { TaskDetailsModal } from '@/components/TaskDetailsModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { getUserTasks, createTask, updateTask, deleteTask } from '@/lib/firebase/db';
+import { getUserTasks, createTask, updateTask, deleteTask, getTask } from '@/lib/firebase/db';
 import { Task, TaskStatus, TaskPriority } from '@/lib/firebase/types';
+
 export default function MyTasksPage() {
-  const { user } = useAuth();
+  const { user, profile, isManager } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,6 +23,8 @@ export default function MyTasksPage() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+  const [detailsTask, setDetailsTask] = useState<Task | null>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
   const currentUserId = user?.uid || (user as any)?.id;
 
@@ -140,6 +144,7 @@ export default function MyTasksPage() {
   const totalCount = tasks.length;
   const completedCount = tasks.filter((t) => t.status === 'completed').length;
   const inProgressCount = tasks.filter((t) => t.status === 'in_progress').length;
+  const underReviewCount = tasks.filter((t) => t.status === 'under_review').length;
   const notStartedCount = tasks.filter((t) => t.status === 'not_started').length;
   const completionRate = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
@@ -181,6 +186,19 @@ export default function MyTasksPage() {
           onOpenNewTaskModal={() => {
             setEditingTask(null);
             setIsTaskModalOpen(true);
+          }}
+          onSelectTask={async (taskId) => {
+            const found = tasks.find((t) => t.id === taskId);
+            if (found) {
+              setDetailsTask(found);
+              setIsDetailsModalOpen(true);
+            } else {
+              const t = await getTask(taskId);
+              if (t) {
+                setDetailsTask(t);
+                setIsDetailsModalOpen(true);
+              }
+            }
           }}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -320,6 +338,17 @@ export default function MyTasksPage() {
               </button>
               <button
                 type="button"
+                onClick={() => setStatusFilter('under_review')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                  statusFilter === 'under_review'
+                    ? 'bg-primary-container text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-container-low'
+                }`}
+              >
+                بانتظار المراجعة ({underReviewCount})
+              </button>
+              <button
+                type="button"
                 onClick={() => setStatusFilter('completed')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
                   statusFilter === 'completed'
@@ -376,19 +405,9 @@ export default function MyTasksPage() {
                 <p className="text-xs text-on-surface-variant mt-1">
                   {searchQuery || statusFilter !== 'all' || priorityFilter !== 'all'
                     ? 'جربي تغيير فلاتر البحث أو التصفية.'
-                    : 'أحسنتِ! يمكنكِ البدء بإضافة مهمة جديدة الآن بالضغط على "مهمة جديدة".'}
+                    : 'أحسنتِ! يمكنكِ البدء بمتابعة مهامكِ المسندة إليكِ أو إضافة مهمة شخصية.'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingTask(null);
-                  setIsTaskModalOpen(true);
-                }}
-                className="mt-2 px-4 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-secondary transition-all"
-              >
-                + إضافة مهمة جديدة
-              </button>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -399,15 +418,36 @@ export default function MyTasksPage() {
                   showAssignee={false}
                   onStatusChange={handleStatusChange}
                   onEdit={(t) => {
-                    setEditingTask(t);
-                    setIsTaskModalOpen(true);
+                    setDetailsTask(t);
+                    setIsDetailsModalOpen(true);
                   }}
-                  onDelete={(id) => setTaskToDelete(id)}
+                  onDelete={(id) => {
+                    if (isManager) {
+                      setTaskToDelete(id);
+                    }
+                  }}
+                  onOpenDetails={(t) => {
+                    setDetailsTask(t);
+                    setIsDetailsModalOpen(true);
+                  }}
                 />
               ))}
             </div>
           )}
         </main>
+
+        {/* مركز تفاصيل المهمة المتكامل */}
+        <TaskDetailsModal
+          isOpen={isDetailsModalOpen}
+          onClose={() => {
+            setIsDetailsModalOpen(false);
+            setDetailsTask(null);
+          }}
+          task={detailsTask}
+          onTaskUpdated={() => {
+            fetchMyTasks();
+          }}
+        />
 
         {/* نافذة إضافة / تعديل مهمة */}
         <TaskModal
