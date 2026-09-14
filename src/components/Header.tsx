@@ -39,9 +39,11 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-space-md flex-1 max-w-xl">
         {onOpenMobileMenu && (
           <button
+            type="button"
             onClick={onOpenMobileMenu}
-            className="lg:hidden p-2 rounded-xl text-on-surface-variant hover:bg-surface-container-low transition-colors"
-            title="القائمة"
+            className="lg:hidden p-2 min-w-[42px] min-h-[42px] flex items-center justify-center rounded-xl text-on-surface-variant hover:bg-surface-container-low active:scale-95 transition-all"
+            title="القائمة الرئيسية"
+            aria-label="فتح القائمة الرئيسية"
           >
             <span className="material-symbols-outlined text-[24px]">menu</span>
           </button>

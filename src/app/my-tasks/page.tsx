@@ -211,7 +211,7 @@ export default function MyTasksPage() {
         />
 
         {/* المحتوى الرئيسي */}
-        <main className="lg:pr-72 pt-20 p-4 lg:p-space-xl flex flex-col gap-6">
+        <main className="lg:pr-72 pt-20 pb-28 lg:pb-10 p-4 lg:p-space-xl flex flex-col gap-6">
           {/* شريط العنوان والإجراءات */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex flex-col gap-1">

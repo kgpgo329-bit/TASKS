@@ -110,7 +110,7 @@ export default function DashboardPage() {
           title="لوحة المتابعة الإدارية"
         />
 
-        <main className="lg:pr-72 pt-20 p-4 lg:p-space-xl flex flex-col gap-6">
+        <main className="lg:pr-72 pt-20 pb-28 lg:pb-10 p-4 lg:p-space-xl flex flex-col gap-6">
           {/* تنبيه الخطأ وزر إعادة المحاولة إن وُجد */}
           {fetchError && (
             <div className="p-4 rounded-2xl bg-error-container/40 border border-error/20 text-on-error-container text-xs flex items-center justify-between">
@@ -189,47 +189,63 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* صف بطاقات المؤشرات (KPIs) */}
+          {/* صف بطاقات المؤشرات (KPIs) - قابلة للنقر بالأيقونات لفتح الصفحات مباشرة */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-            <div className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between">
+            <Link
+              href="/all-tasks"
+              className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5 active:scale-98 transition-all cursor-pointer group"
+              title="الانتقال إلى جميع المهام"
+            >
               <div className="flex flex-col">
-                <span className="text-xs text-on-surface-variant font-medium">مهام الجمعية</span>
+                <span className="text-xs text-on-surface-variant font-medium group-hover:text-primary transition-colors">مهام الجمعية</span>
                 <span className="text-2xl font-bold text-primary mt-1">{totalTasks}</span>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-primary">
+              <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all shadow-xs">
                 <span className="material-symbols-outlined text-[22px]">format_list_bulleted</span>
               </div>
-            </div>
+            </Link>
 
-            <div className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between">
+            <Link
+              href="/all-tasks"
+              className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between hover:shadow-md hover:border-amber-500/40 hover:-translate-y-0.5 active:scale-98 transition-all cursor-pointer group"
+              title="الانتقال إلى المهام قيد التنفيذ"
+            >
               <div className="flex flex-col">
-                <span className="text-xs text-on-surface-variant font-medium">قيد التنفيذ</span>
+                <span className="text-xs text-on-surface-variant font-medium group-hover:text-amber-600 transition-colors">قيد التنفيذ</span>
                 <span className="text-2xl font-bold text-amber-600 mt-1">{inProgressTasks}</span>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-all shadow-xs">
                 <span className="material-symbols-outlined text-[22px]">pending_actions</span>
               </div>
-            </div>
+            </Link>
 
-            <div className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between">
+            <Link
+              href="/all-tasks"
+              className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between hover:shadow-md hover:border-secondary/40 hover:-translate-y-0.5 active:scale-98 transition-all cursor-pointer group"
+              title="الانتقال إلى المهام المنجزة"
+            >
               <div className="flex flex-col">
-                <span className="text-xs text-on-surface-variant font-medium">المهام المنجزة</span>
+                <span className="text-xs text-on-surface-variant font-medium group-hover:text-secondary transition-colors">المهام المنجزة</span>
                 <span className="text-2xl font-bold text-secondary mt-1">{completedTasks}</span>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-secondary-container/50 flex items-center justify-center text-secondary">
+              <div className="w-10 h-10 rounded-xl bg-secondary-container/50 flex items-center justify-center text-secondary group-hover:bg-secondary group-hover:text-white transition-all shadow-xs">
                 <span className="material-symbols-outlined text-[22px]">verified</span>
               </div>
-            </div>
+            </Link>
 
-            <div className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between">
+            <Link
+              href="/employees"
+              className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5 active:scale-98 transition-all cursor-pointer group"
+              title="الانتقال إلى إدارة الموظفات"
+            >
               <div className="flex flex-col">
-                <span className="text-xs text-on-surface-variant font-medium">فريق العمل</span>
+                <span className="text-xs text-on-surface-variant font-medium group-hover:text-primary transition-colors">فريق العمل</span>
                 <span className="text-2xl font-bold text-primary mt-1">{employees.length}</span>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-primary">
+              <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all shadow-xs">
                 <span className="material-symbols-outlined text-[22px]">group</span>
               </div>
-            </div>
+            </Link>
           </div>
 
           {/* محتوى اللوحة الرئيسي: قسمان متجاوران */}

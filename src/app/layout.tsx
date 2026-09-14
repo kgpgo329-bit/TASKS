@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { BottomNav } from '@/components/BottomNav';
 
 export const metadata: Metadata = {
   title: 'مهامي - جمعية هاد | وقار وإنجاز',
@@ -26,7 +27,10 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-background text-on-surface min-h-screen antialiased">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+          <BottomNav />
+        </AuthProvider>
       </body>
     </html>
   );

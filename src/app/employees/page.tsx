@@ -175,7 +175,7 @@ export default function EmployeesPage() {
           title="إدارة الموظفات"
         />
 
-        <main className="lg:pr-72 pt-20 p-4 lg:p-space-xl flex flex-col gap-6">
+        <main className="lg:pr-72 pt-20 pb-28 lg:pb-10 p-4 lg:p-space-xl flex flex-col gap-6">
           {/* رأس الصفحة مع زر إضافة موظفة */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex flex-col gap-1">

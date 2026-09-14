@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Logo } from '@/components/Logo';
 
@@ -14,6 +14,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose, myTasksCount }) => {
   const pathname = usePathname();
+  const router = useRouter();
   const { profile, isManager, signOut } = useAuth();
 
   const navItems = isManager
@@ -78,7 +79,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose, myTas
                 <Link
                   key={item.path}
                   href={item.path}
-                  onClick={onClose}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (onClose) onClose();
+                    router.push(item.path);
+                  }}
                   className={`flex items-center justify-between px-space-md py-space-sm rounded-xl font-medium transition-all duration-150 ${
                     isActive
                       ? 'bg-primary-container text-on-primary shadow-sm'
