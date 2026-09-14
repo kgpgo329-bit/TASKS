@@ -32,25 +32,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   // جلب مستند المستخدم من Firestore والتحقق من صلاحياته
-  const fetchUserProfile = async (uid: string): Promise<Profile | null> => {
+  const fetchUserProfile = async (
+    uid: string
+  ): Promise<{ profile: Profile | null; error?: string }> => {
     try {
       const userProfile = await getProfile(uid);
-      return userProfile;
-    } catch (err) {
-      console.error('Error fetching user document from Firestore:', err);
-      return null;
+      return { profile: userProfile };
+    } catch (err: any) {
+      console.warn('Warning fetching user document from Firestore:', err?.message || err);
+      return { profile: null, error: err?.message || 'Network error' };
     }
   };
 
   const refreshProfile = async () => {
     if (!user) return;
-    const p = await fetchUserProfile(user.uid);
-    if (p) {
-      if (p.is_active === false || (p.role !== 'manager' && p.role !== 'employee')) {
-        await signOut();
-      } else {
-        setProfile(p);
+    try {
+      const res = await fetchUserProfile(user.uid);
+      const p = res.profile;
+      if (p) {
+        if (p.is_active === false || (p.role !== 'manager' && p.role !== 'employee')) {
+          await signOut();
+        } else {
+          setProfile(p);
+        }
       }
+    } catch (err) {
+      console.warn('refreshProfile error:', err);
     }
   };
 
@@ -68,36 +75,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    // مؤقت أمان يضمن عدم بقاء شاشة التحميل معلقة أكثر من 7 ثوانٍ في أي ظرف شبكي
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 7000);
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-          const userProfile = await fetchUserProfile(firebaseUser.uid);
-          // التحقق من وجود المستند وصلاحية الدور والتفعيل
-          if (
-            !userProfile ||
-            (userProfile.role !== 'manager' && userProfile.role !== 'employee') ||
-            userProfile.is_active === false
+      try {
+        if (firebaseUser) {
+          const res = await fetchUserProfile(firebaseUser.uid);
+          if (res.error) {
+            // في حالة وجود خطأ شبكة مؤقت لا نسجل الخروج قسراً بل نحافظ على المستخدم
+            setUser(firebaseUser);
+          } else if (
+            !res.profile ||
+            (res.profile.role !== 'manager' && res.profile.role !== 'employee') ||
+            res.profile.is_active === false
           ) {
+            // إذا كان المستند غير موجود نهائياً أو معطل من الإدارة
             await firebaseSignOut(auth);
             setUser(null);
             setProfile(null);
           } else {
             setUser(firebaseUser);
-            setProfile(userProfile);
+            setProfile(res.profile);
           }
-        } catch (e) {
-          console.error('Auth state verification error:', e);
+        } else {
           setUser(null);
           setProfile(null);
         }
-      } else {
-        setUser(null);
-        setProfile(null);
+      } catch (e) {
+        console.error('Auth state verification error:', e);
+      } finally {
+        clearTimeout(safetyTimer);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      unsubscribe();
+    };
   }, []);
 
   // تسجيل الدخول الحقيقي عبر البريد وكلمة المرور في Firebase Auth
@@ -123,8 +141,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // 2. قراءة مستند المستخدم من Firestore: users/{uid}
       console.log('[Auth] Fetching user document from Firestore (users/' + uid + ')...');
-      const userProfile = await fetchUserProfile(uid);
+      const fetchRes = await fetchUserProfile(uid);
+      const userProfile = fetchRes.profile;
       console.log('[Auth] Firestore userProfile result:', userProfile);
+
+      if (fetchRes.error) {
+        await firebaseSignOut(auth);
+        setUser(null);
+        setProfile(null);
+        return {
+          error: `[firestore/network-error] تعذر قراءة بيانات المستخدم من Firestore: ${fetchRes.error}`,
+        };
+      }
 
       // 3. التحقق من وجود المستند في Firestore
       if (!userProfile) {

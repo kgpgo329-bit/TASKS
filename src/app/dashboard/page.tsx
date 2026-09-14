@@ -25,9 +25,11 @@ export default function DashboardPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detailsTask, setDetailsTask] = useState<Task | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchDashboardData = async () => {
     setLoading(true);
+    setFetchError(null);
 
     try {
       const [tasksData, profilesData] = await Promise.all([getAllTasks(), getAllProfiles()]);
@@ -38,8 +40,9 @@ export default function DashboardPage() {
 
       setTasks(tasksWithProfiles);
       setEmployees(profilesData);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Exception fetching dashboard data:', err);
+      setFetchError(err?.message || 'تعذر تحميل بيانات لوحة التحكم');
     } finally {
       setLoading(false);
     }
@@ -105,6 +108,24 @@ export default function DashboardPage() {
         />
 
         <main className="lg:pr-72 pt-20 p-4 lg:p-space-xl flex flex-col gap-6">
+          {/* تنبيه الخطأ وزر إعادة المحاولة إن وُجد */}
+          {fetchError && (
+            <div className="p-4 rounded-2xl bg-error-container/40 border border-error/20 text-on-error-container text-xs flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] text-error">cloud_off</span>
+                <span>{fetchError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchDashboardData()}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary text-white rounded-xl text-xs font-bold hover:bg-secondary transition-colors shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px]">refresh</span>
+                <span>إعادة المحاولة</span>
+              </button>
+            </div>
+          )}
+
           {/* بانر الترحيب ونسبة الإنجاز الأسبوعية (مطابق لتصميم stitch_/_2) */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-l from-primary-container via-primary to-primary text-white p-6 lg:p-8 shadow-md">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">

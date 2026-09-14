@@ -21,15 +21,21 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onSe
 
   const userId = user?.uid || (user as any)?.id;
 
-  // الاستماع اللحظي للإشعارات
+  // الاستماع اللحظي للإشعارات مع حماية إلغاء التثبيت
   useEffect(() => {
     if (!userId) return;
 
+    let isMounted = true;
     const unsubscribe = subscribeToUserNotifications(userId, (notifs) => {
-      setNotifications(notifs);
+      if (isMounted) {
+        setNotifications(notifs);
+      }
     });
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [userId]);
 
   // إغلاق القائمة عند النقر خارجها

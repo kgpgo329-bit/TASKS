@@ -85,24 +85,31 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 
   const taskId = currentTask?.id;
 
-  // الاستماع اللحظي لتحديثات المهمة
+  // الاستماع اللحظي لتحديثات المهمة مع حماية دورة الحياة
   useEffect(() => {
     if (!isOpen || !taskId) return;
 
+    let isMounted = true;
+
     // استماع لرسائل الشات
     const unsubscribeMessages = subscribeToTaskMessages(taskId, (msgs) => {
-      setMessages(msgs);
-      if (activeTab === 'chat' && currentUserId) {
-        markTaskMessagesAsRead(taskId, currentUserId);
+      if (isMounted) {
+        setMessages(msgs);
+        if (activeTab === 'chat' && currentUserId) {
+          markTaskMessagesAsRead(taskId, currentUserId);
+        }
       }
     });
 
     // استماع لسجل النشاط
     const unsubscribeActivities = subscribeToTaskActivities(taskId, (acts) => {
-      setActivities(acts);
+      if (isMounted) {
+        setActivities(acts);
+      }
     });
 
     return () => {
+      isMounted = false;
       unsubscribeMessages();
       unsubscribeActivities();
     };

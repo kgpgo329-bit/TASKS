@@ -28,44 +28,64 @@ import {
   ActivityType,
 } from './types';
 
+// دالة أمان لمنع تعليق وعود Firestore في حال بطء أو انقطاع الشبكة
+export function withTimeout<T>(
+  promise: Promise<T>,
+  ms = 10000,
+  errorMessage = 'انتهت مهلة استجابة قاعدة البيانات (Timeout)'
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), ms)
+    ),
+  ]);
+}
+
 // ==============================================================================
 // Profiles (المستخدمات / الموظفات)
 // ==============================================================================
 
 export async function getProfile(userId: string): Promise<Profile | null> {
-  // 1. قراءة مستند المستخدم أولاً من مجموعة users/{uid} كما هو مطلوب بدقة
-  const userRef = doc(db, 'users', userId);
-  const userSnap = await getDoc(userRef);
-  if (userSnap.exists()) {
-    const data = userSnap.data();
-    return {
-      id: userId,
-      name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
-      email: data.email || '',
-      role: data.role as UserRole,
-      is_active: data.is_active !== undefined ? data.is_active : (data.isActive !== undefined ? data.isActive : true),
-      created_at: data.created_at || data.createdAt || new Date().toISOString(),
-      updated_at: data.updated_at || data.updatedAt || new Date().toISOString(),
-    };
-  }
+  return withTimeout(
+    (async () => {
+      // 1. قراءة مستند المستخدم أولاً من مجموعة users/{uid} كما هو مطلوب بدقة
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        return {
+          id: userId,
+          name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
+          email: data.email || '',
+          role: data.role as UserRole,
+          is_active: data.is_active !== undefined ? data.is_active : (data.isActive !== undefined ? data.isActive : true),
+          created_at: data.created_at || data.createdAt || new Date().toISOString(),
+          updated_at: data.updated_at || data.updatedAt || new Date().toISOString(),
+        };
+      }
 
-  // 2. كخيار احتياطي قراءة profiles/{uid}
-  const profRef = doc(db, 'profiles', userId);
-  const profSnap = await getDoc(profRef);
-  if (profSnap.exists()) {
-    const data = profSnap.data();
-    return {
-      id: userId,
-      name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
-      email: data.email || '',
-      role: data.role as UserRole,
-      is_active: data.is_active !== undefined ? data.is_active : (data.isActive !== undefined ? data.isActive : true),
-      created_at: data.created_at || data.createdAt || new Date().toISOString(),
-      updated_at: data.updated_at || data.updatedAt || new Date().toISOString(),
-    };
-  }
+      // 2. كخيار احتياطي قراءة profiles/{uid}
+      const profRef = doc(db, 'profiles', userId);
+      const profSnap = await getDoc(profRef);
+      if (profSnap.exists()) {
+        const data = profSnap.data();
+        return {
+          id: userId,
+          name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
+          email: data.email || '',
+          role: data.role as UserRole,
+          is_active: data.is_active !== undefined ? data.is_active : (data.isActive !== undefined ? data.isActive : true),
+          created_at: data.created_at || data.createdAt || new Date().toISOString(),
+          updated_at: data.updated_at || data.updatedAt || new Date().toISOString(),
+        };
+      }
 
-  return null;
+      return null;
+    })(),
+    10000,
+    'تعذر قراءة بيانات المستخدم: انتهت مهلة الاتصال'
+  );
 }
 
 export const getUserDocument = getProfile;
@@ -80,37 +100,43 @@ export async function setProfile(profile: Profile): Promise<void> {
 }
 
 export async function getAllProfiles(): Promise<Profile[]> {
-  const usersCol = collection(db, 'users');
-  const userSnap = await getDocs(usersCol);
-  if (!userSnap.empty) {
-    return userSnap.docs.map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
-        email: data.email || '',
-        role: data.role as UserRole,
-        is_active: data.is_active !== undefined ? data.is_active : (data.isActive !== undefined ? data.isActive : true),
-        created_at: data.created_at || data.createdAt || new Date().toISOString(),
-        updated_at: data.updated_at || data.updatedAt || new Date().toISOString(),
-      };
-    });
-  }
+  return withTimeout(
+    (async () => {
+      const usersCol = collection(db, 'users');
+      const userSnap = await getDocs(usersCol);
+      if (!userSnap.empty) {
+        return userSnap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
+            email: data.email || '',
+            role: data.role as UserRole,
+            is_active: data.is_active !== undefined ? data.is_active : (data.isActive !== undefined ? data.isActive : true),
+            created_at: data.created_at || data.createdAt || new Date().toISOString(),
+            updated_at: data.updated_at || data.updatedAt || new Date().toISOString(),
+          };
+        });
+      }
 
-  const profCol = collection(db, 'profiles');
-  const profSnap = await getDocs(profCol);
-  return profSnap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
-      email: data.email || '',
-      role: data.role as UserRole,
-      is_active: data.is_active !== undefined ? data.is_active : true,
-      created_at: data.created_at || new Date().toISOString(),
-      updated_at: data.updated_at || new Date().toISOString(),
-    };
-  });
+      const profCol = collection(db, 'profiles');
+      const profSnap = await getDocs(profCol);
+      return profSnap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
+          email: data.email || '',
+          role: data.role as UserRole,
+          is_active: data.is_active !== undefined ? data.is_active : true,
+          created_at: data.created_at || new Date().toISOString(),
+          updated_at: data.updated_at || new Date().toISOString(),
+        };
+      });
+    })(),
+    10000,
+    'تعذر جلب قائمة الموظفات: انتهت مهلة الاتصال'
+  );
 }
 
 export async function updateProfile(userId: string, data: Partial<Profile>): Promise<void> {
@@ -159,25 +185,43 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
 // ==============================================================================
 
 export async function getTask(taskId: string): Promise<Task | null> {
-  const docRef = doc(db, 'tasks', taskId);
-  const snap = await getDoc(docRef);
-  if (!snap.exists()) return null;
-  return { ...snap.data(), id: snap.id } as Task;
+  return withTimeout(
+    (async () => {
+      const docRef = doc(db, 'tasks', taskId);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) return null;
+      return { ...snap.data(), id: snap.id } as Task;
+    })(),
+    10000,
+    'تعذر قراءة بيانات المهمة: انتهت مهلة الاتصال'
+  );
 }
 
 export async function getUserTasks(userId: string): Promise<Task[]> {
-  const tasksCol = collection(db, 'tasks');
-  const q = query(tasksCol, where('user_id', '==', userId));
-  const snap = await getDocs(q);
-  const list = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Task));
-  return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return withTimeout(
+    (async () => {
+      const tasksCol = collection(db, 'tasks');
+      const q = query(tasksCol, where('user_id', '==', userId));
+      const snap = await getDocs(q);
+      const list = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Task));
+      return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    })(),
+    10000,
+    'تعذر جلب قائمة المهام الخاصة: انتهت مهلة الاتصال'
+  );
 }
 
 export async function getAllTasks(): Promise<Task[]> {
-  const tasksCol = collection(db, 'tasks');
-  const snap = await getDocs(tasksCol);
-  const list = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Task));
-  return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return withTimeout(
+    (async () => {
+      const tasksCol = collection(db, 'tasks');
+      const snap = await getDocs(tasksCol);
+      const list = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Task));
+      return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    })(),
+    10000,
+    'تعذر جلب جميع المهام: انتهت مهلة الاتصال'
+  );
 }
 
 export async function createTask(
@@ -395,19 +439,24 @@ export function subscribeToTaskMessages(
   taskId: string,
   onUpdate: (messages: TaskMessage[]) => void
 ): () => void {
-  const messagesCol = collection(db, 'tasks', taskId, 'messages');
-  const q = query(messagesCol, orderBy('created_at', 'asc'));
+  try {
+    const messagesCol = collection(db, 'tasks', taskId, 'messages');
+    const q = query(messagesCol, orderBy('created_at', 'asc'));
 
-  return onSnapshot(
-    q,
-    (snap) => {
-      const msgs = snap.docs.map((d) => ({ ...d.data(), id: d.id } as TaskMessage));
-      onUpdate(msgs);
-    },
-    (err) => {
-      console.error('Error in subscribeToTaskMessages:', err);
-    }
-  );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const msgs = snap.docs.map((d) => ({ ...d.data(), id: d.id } as TaskMessage));
+        onUpdate(msgs);
+      },
+      (err) => {
+        console.warn('subscribeToTaskMessages warning:', err?.message || err);
+      }
+    );
+  } catch (err) {
+    console.warn('Failed to subscribe to task messages:', err);
+    return () => {};
+  }
 }
 
 export async function sendTaskMessage(
@@ -493,19 +542,24 @@ export function subscribeToTaskActivities(
   taskId: string,
   onUpdate: (activities: TaskActivity[]) => void
 ): () => void {
-  const activitiesCol = collection(db, 'tasks', taskId, 'activities');
-  const q = query(activitiesCol, orderBy('created_at', 'desc'));
+  try {
+    const activitiesCol = collection(db, 'tasks', taskId, 'activities');
+    const q = query(activitiesCol, orderBy('created_at', 'desc'));
 
-  return onSnapshot(
-    q,
-    (snap) => {
-      const acts = snap.docs.map((d) => ({ ...d.data(), id: d.id } as TaskActivity));
-      onUpdate(acts);
-    },
-    (err) => {
-      console.error('Error in subscribeToTaskActivities:', err);
-    }
-  );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const acts = snap.docs.map((d) => ({ ...d.data(), id: d.id } as TaskActivity));
+        onUpdate(acts);
+      },
+      (err) => {
+        console.warn('subscribeToTaskActivities warning:', err?.message || err);
+      }
+    );
+  } catch (err) {
+    console.warn('Failed to subscribe to task activities:', err);
+    return () => {};
+  }
 }
 
 export async function logTaskActivity(
@@ -532,24 +586,30 @@ export function subscribeToUserNotifications(
   userId: string,
   onUpdate: (notifications: AppNotification[]) => void
 ): () => void {
-  const notifsCol = collection(db, 'notifications');
-  const q = query(
-    notifsCol,
-    where('user_id', '==', userId),
-    orderBy('created_at', 'desc'),
-    limit(30)
-  );
+  try {
+    const notifsCol = collection(db, 'notifications');
+    // استعلام بسيط بدون orderBy على حقل مركب لتفادي اشتراط وجود Composite Index في Firestore
+    const q = query(notifsCol, where('user_id', '==', userId));
 
-  return onSnapshot(
-    q,
-    (snap) => {
-      const list = snap.docs.map((d) => ({ ...d.data(), id: d.id } as AppNotification));
-      onUpdate(list);
-    },
-    (err) => {
-      console.error('Error in subscribeToUserNotifications:', err);
-    }
-  );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs.map((d) => ({ ...d.data(), id: d.id } as AppNotification));
+        // ترتيب الإشعارات زمنياً من الأحدث إلى الأقدم في الذاكرة
+        list.sort(
+          (a, b) =>
+            new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        );
+        onUpdate(list.slice(0, 30));
+      },
+      (err) => {
+        console.warn('subscribeToUserNotifications warning:', err?.message || err);
+      }
+    );
+  } catch (err) {
+    console.warn('Failed to subscribe to user notifications:', err);
+    return () => {};
+  }
 }
 
 export async function createNotification(

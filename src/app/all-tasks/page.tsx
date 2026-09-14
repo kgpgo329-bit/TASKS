@@ -27,9 +27,11 @@ export default function AllTasksPage() {
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [detailsTask, setDetailsTask] = useState<Task | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchAllData = async () => {
     setLoading(true);
+    setFetchError(null);
 
     try {
       const [tasksData, profilesData] = await Promise.all([getAllTasks(), getAllProfiles()]);
@@ -39,8 +41,9 @@ export default function AllTasksPage() {
       }));
       setTasks(tasksWithProfiles);
       setEmployees(profilesData);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Exception fetching tasks:', err);
+      setFetchError(err?.message || 'تعذر جلب قائمة المهام');
     } finally {
       setLoading(false);
     }
@@ -304,9 +307,28 @@ export default function AllTasksPage() {
 
           {/* قائمة المهام مع إظهار الموظفة المكلفة */}
           {loading ? (
-            <div className="py-16 flex flex-col items-center justify-center gap-3">
-              <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-xs text-outline font-medium">جاري جلب مهام الجمعية...</span>
+            <div className="py-20 bg-surface-container-lowest rounded-2xl border border-surface-variant/40 flex flex-col items-center justify-center gap-3">
+              <div className="w-9 h-9 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-sm text-primary font-bold">جاري جلب مهام الجمعية...</span>
+              <span className="text-xs text-on-surface-variant">يتم الآن مزامنة كافة المهام الإدارية</span>
+            </div>
+          ) : fetchError ? (
+            <div className="py-16 bg-surface-container-lowest rounded-2xl border border-error/20 flex flex-col items-center justify-center p-8 text-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-error-container/40 text-error flex items-center justify-center shadow-sm">
+                <span className="material-symbols-outlined text-3xl">cloud_off</span>
+              </div>
+              <div className="flex flex-col gap-1 max-w-md">
+                <h3 className="font-bold text-primary text-base">تعذر جلب المهام حالياً</h3>
+                <p className="text-xs text-on-surface-variant">{fetchError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchAllData()}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-secondary text-white rounded-xl text-xs font-bold shadow-md shadow-primary/10 transition-all transform active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[18px]">refresh</span>
+                <span>إعادة المحاولة</span>
+              </button>
             </div>
           ) : filteredTasks.length === 0 ? (
             <div className="py-16 bg-surface-container-lowest rounded-2xl border border-surface-variant/40 flex flex-col items-center justify-center p-8 text-center gap-3">

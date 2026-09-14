@@ -18,6 +18,7 @@ export default function EmployeesPage() {
   const { user } = useAuth();
   const [employees, setEmployees] = useState<EmployeeWithStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,6 +29,7 @@ export default function EmployeesPage() {
 
   const fetchEmployees = async () => {
     setLoading(true);
+    setFetchError(null);
     setActionError('');
 
     try {
@@ -45,7 +47,9 @@ export default function EmployeesPage() {
       setEmployees(empsWithStats);
     } catch (err: any) {
       console.error('Error fetching employees:', err);
-      setActionError(err.message || 'حدث خطأ في تحميل قائمة الموظفات');
+      const msg = err?.message || 'تعذر تحميل بيانات الموظفات حالياً';
+      setFetchError(msg);
+      setActionError(msg);
     } finally {
       setLoading(false);
     }
@@ -223,9 +227,28 @@ export default function EmployeesPage() {
 
           {/* جدول وبطاقات الموظفات */}
           {loading ? (
-            <div className="py-16 flex flex-col items-center justify-center gap-3">
-              <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-xs text-outline font-medium">جاري تحميل بيانات الموظفات...</span>
+            <div className="py-20 bg-surface-container-lowest rounded-2xl border border-surface-variant/40 flex flex-col items-center justify-center gap-3">
+              <div className="w-9 h-9 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-sm text-primary font-bold">جاري تحميل بيانات الموظفات والمهام...</span>
+              <span className="text-xs text-on-surface-variant">يتم الآن جلب السجلات المعتمدة من النظام</span>
+            </div>
+          ) : fetchError ? (
+            <div className="py-16 bg-surface-container-lowest rounded-2xl border border-error/20 flex flex-col items-center justify-center p-8 text-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-error-container/40 text-error flex items-center justify-center shadow-sm">
+                <span className="material-symbols-outlined text-3xl">cloud_off</span>
+              </div>
+              <div className="flex flex-col gap-1 max-w-md">
+                <h3 className="font-bold text-primary text-base">تعذر تحميل البيانات حالياً</h3>
+                <p className="text-xs text-on-surface-variant">{fetchError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchEmployees()}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-secondary text-white rounded-xl text-xs font-bold shadow-md shadow-primary/10 transition-all transform active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[18px]">refresh</span>
+                <span>إعادة المحاولة</span>
+              </button>
             </div>
           ) : filteredEmployees.length === 0 ? (
             <div className="py-16 bg-surface-container-lowest rounded-2xl border border-surface-variant/40 flex flex-col items-center justify-center p-8 text-center gap-3">

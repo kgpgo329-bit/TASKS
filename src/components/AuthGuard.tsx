@@ -20,14 +20,15 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireRole }) =
     if (!loading) {
       if (!user) {
         router.replace('/login');
-      } else if (requireRole === 'manager' && !isManager) {
-        // إذا حاولت موظفة دخول صفحة مخصصة للمديرة
+      } else if (requireRole === 'manager' && profile && !isManager) {
+        // إذا حاولت موظفة دخول صفحة مخصصة للمديرة بعد التأكد من جلب بيانات الملف
         router.replace('/my-tasks');
       }
     }
-  }, [user, profile, loading, requireRole, isManager, router, pathname]);
+  }, [user, profile, loading, requireRole, isManager, router]);
 
-  if (loading) {
+  // ننتظر حتى تكتمل قراءة بيانات المستخدم وصلاحياته تماماً
+  if (loading || (user && !profile)) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <Logo size={56} showText={true} />
