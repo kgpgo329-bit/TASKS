@@ -56,9 +56,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose, myTas
       <div className="flex flex-col">
         {/* رأس القائمة الجانبية مع الشعار */}
         <div className="p-space-lg flex items-center justify-between border-b border-surface-variant/30">
-          <Logo size={42} showText={true} />
+          <a href="/dashboard" className="cursor-pointer hover:opacity-90 transition-opacity">
+            <Logo size={42} showText={true} />
+          </a>
           {onClose && (
             <button
+              type="button"
               onClick={onClose}
               className="lg:hidden p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-colors"
             >
@@ -76,15 +79,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose, myTas
             {navItems.map((item) => {
               const isActive = pathname === item.path;
               return (
-                <Link
+                <a
                   key={item.path}
                   href={item.path}
                   onClick={(e) => {
-                    e.preventDefault();
+                    if (pathname === item.path) {
+                      e.preventDefault();
+                      if (onClose) onClose();
+                      return;
+                    }
                     if (onClose) onClose();
-                    router.push(item.path);
+                    window.location.href = item.path;
                   }}
-                  className={`flex items-center justify-between px-space-md py-space-sm rounded-xl font-medium transition-all duration-150 ${
+                  className={`flex items-center justify-between px-space-md py-space-sm rounded-xl font-medium transition-all duration-150 cursor-pointer ${
                     isActive
                       ? 'bg-primary-container text-on-primary shadow-sm'
                       : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
@@ -105,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose, myTas
                       {item.badge}
                     </span>
                   )}
-                </Link>
+                </a>
               );
             })}
           </nav>

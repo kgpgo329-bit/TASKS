@@ -191,8 +191,12 @@ export default function DashboardPage() {
 
           {/* صف بطاقات المؤشرات (KPIs) - قابلة للنقر بالأيقونات لفتح الصفحات مباشرة */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-            <Link
+            <a
               href="/all-tasks"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.href = '/all-tasks';
+              }}
               className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5 active:scale-98 transition-all cursor-pointer group"
               title="الانتقال إلى جميع المهام"
             >
@@ -203,10 +207,14 @@ export default function DashboardPage() {
               <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all shadow-xs">
                 <span className="material-symbols-outlined text-[22px]">format_list_bulleted</span>
               </div>
-            </Link>
+            </a>
 
-            <Link
+            <a
               href="/all-tasks"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.href = '/all-tasks';
+              }}
               className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between hover:shadow-md hover:border-amber-500/40 hover:-translate-y-0.5 active:scale-98 transition-all cursor-pointer group"
               title="الانتقال إلى المهام قيد التنفيذ"
             >
@@ -217,10 +225,14 @@ export default function DashboardPage() {
               <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-all shadow-xs">
                 <span className="material-symbols-outlined text-[22px]">pending_actions</span>
               </div>
-            </Link>
+            </a>
 
-            <Link
+            <a
               href="/all-tasks"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.href = '/all-tasks';
+              }}
               className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between hover:shadow-md hover:border-secondary/40 hover:-translate-y-0.5 active:scale-98 transition-all cursor-pointer group"
               title="الانتقال إلى المهام المنجزة"
             >
@@ -231,10 +243,14 @@ export default function DashboardPage() {
               <div className="w-10 h-10 rounded-xl bg-secondary-container/50 flex items-center justify-center text-secondary group-hover:bg-secondary group-hover:text-white transition-all shadow-xs">
                 <span className="material-symbols-outlined text-[22px]">verified</span>
               </div>
-            </Link>
+            </a>
 
-            <Link
+            <a
               href="/employees"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.href = '/employees';
+              }}
               className="bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-variant/40 flex items-center justify-between hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5 active:scale-98 transition-all cursor-pointer group"
               title="الانتقال إلى إدارة الموظفات"
             >
@@ -245,7 +261,7 @@ export default function DashboardPage() {
               <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all shadow-xs">
                 <span className="material-symbols-outlined text-[22px]">group</span>
               </div>
-            </Link>
+            </a>
           </div>
 
           {/* محتوى اللوحة الرئيسي: قسمان متجاوران */}

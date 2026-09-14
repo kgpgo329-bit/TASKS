@@ -53,10 +53,17 @@ export const BottomNav: React.FC = () => {
       {navItems.map((item) => {
         const isActive = pathname === item.path;
         return (
-          <Link
+          <a
             key={item.path}
             href={item.path}
-            className={`flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all duration-200 active:scale-95 ${
+            onClick={(e) => {
+              if (pathname === item.path) {
+                e.preventDefault();
+                return;
+              }
+              window.location.href = item.path;
+            }}
+            className={`flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all duration-200 active:scale-95 cursor-pointer ${
               isActive
                 ? 'text-primary font-bold'
                 : 'text-on-surface-variant hover:text-on-surface'
@@ -70,7 +77,7 @@ export const BottomNav: React.FC = () => {
               <span className="material-symbols-outlined text-[22px]">{item.icon}</span>
             </div>
             <span className="text-[10px] mt-0.5 tracking-tight font-medium">{item.label}</span>
-          </Link>
+          </a>
         );
       })}
     </nav>

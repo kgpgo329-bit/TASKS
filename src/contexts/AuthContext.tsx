@@ -258,8 +258,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const isManager = profile?.role === 'manager';
-  const isEmployee = profile?.role === 'employee';
+  const roleStr = (profile?.role || '').toString().toLowerCase().trim();
+  const isManager = Boolean(
+    profile &&
+    (roleStr === 'manager' || roleStr === 'admin' || roleStr.includes('مدير'))
+  );
+  const isEmployee = Boolean(
+    profile &&
+    (roleStr === 'employee' || roleStr.includes('موظف'))
+  );
 
   return (
     <AuthContext.Provider

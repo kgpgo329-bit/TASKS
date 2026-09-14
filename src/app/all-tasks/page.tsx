@@ -171,9 +171,9 @@ export default function AllTasksPage() {
   // تصفية المهام
   const filteredTasks = tasks.filter((t) => {
     const matchesSearch =
-      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (t.profiles?.name && t.profiles.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      (t.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      Boolean(t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      Boolean(t.profiles?.name && t.profiles.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesEmployee = selectedEmployeeId === 'all' || t.user_id === selectedEmployeeId;
     const matchesStatus = statusFilter === 'all' || t.status === statusFilter;

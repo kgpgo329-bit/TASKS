@@ -16,6 +16,11 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireRole }) =
   const router = useRouter();
   const pathname = usePathname();
 
+  const userRole = (profile?.role || '').toString().toLowerCase().trim();
+  const hasManagerAccess = Boolean(
+    isManager || userRole === 'manager' || userRole === 'admin' || userRole.includes('مدير')
+  );
+
   useEffect(() => {
     if (!loading) {
       if (!user) {
@@ -23,12 +28,12 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireRole }) =
       } else if (!profile) {
         // انتهى التحميل ولم يتم العثور على مستند المستخدم
         router.replace('/login');
-      } else if (requireRole === 'manager' && !isManager) {
+      } else if (requireRole === 'manager' && !hasManagerAccess) {
         // إذا حاولت موظفة دخول صفحة مخصصة للمديرة
         router.replace('/my-tasks');
       }
     }
-  }, [user, profile, loading, requireRole, isManager, router]);
+  }, [user, profile, loading, requireRole, hasManagerAccess, router]);
 
   // حالة التحميل أثناء فحص الجلسة فقط
   if (loading) {
