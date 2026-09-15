@@ -68,6 +68,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   const [completionFiles, setCompletionFiles] = useState<File[]>([]);
   const [completingTask, setCompletingTask] = useState(false);
   const [completionError, setCompletionError] = useState('');
+  const [completionSuccess, setCompletionSuccess] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
   // معاينة الصورة المكبرة (Lightbox)
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -84,6 +86,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     setUploadSuccess('');
     setIsCompletionModalOpen(false);
     setCompletionError('');
+    setCompletionSuccess(false);
+    setActionFeedback(null);
   }, [initialTask, isOpen]);
 
   const taskId = currentTask?.id;
@@ -258,6 +262,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       const updated = { ...currentTask, status: newStatus };
       setCurrentTask(updated);
       if (onTaskUpdated) onTaskUpdated(updated);
+      const label = statusConfig[newStatus]?.label || newStatus;
+      setActionFeedback(`تم تحديث حالة المهمة إلى "${label}" بنجاح ✅`);
+      setTimeout(() => setActionFeedback(null), 4000);
     } catch (err: any) {
       console.error('Error changing status:', err);
     }
@@ -267,6 +274,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   const handleConfirmCompletion = async () => {
     setCompletingTask(true);
     setCompletionError('');
+    setCompletionSuccess(false);
+
     try {
       const uploadedAttachments: TaskAttachment[] = [];
 
@@ -300,9 +309,17 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 
       setCurrentTask(updated);
       if (onTaskUpdated) onTaskUpdated(updated);
-      setIsCompletionModalOpen(false);
-      setCompletionNote('');
-      setCompletionFiles([]);
+
+      // إظهار حالة النجاح الفوري أولاً داخل النافذة ثم إغلاقها بسلاسة
+      setCompletionSuccess(true);
+      setTimeout(() => {
+        setIsCompletionModalOpen(false);
+        setCompletionNote('');
+        setCompletionFiles([]);
+        setCompletionSuccess(false);
+        setActionFeedback('🎉 تم تأكيد إنجاز المهمة وإرسال إثباتكِ بنجاح!');
+        setTimeout(() => setActionFeedback(null), 5000);
+      }, 700);
     } catch (err: any) {
       console.error('Error completing task:', err);
       setCompletionError(err.message || 'حدث خطأ أثناء حفظ إثبات إنجاز المهمة');
@@ -496,6 +513,23 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 
           {/* جسم النافذة ومحتوى التبويبات */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+            {/* إشعار وتأكيد الإجراء السريع */}
+            {actionFeedback && (
+              <div className="mb-4 p-3.5 rounded-2xl bg-secondary/15 border border-secondary/30 text-secondary flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex items-center gap-2.5">
+                  <span className="material-symbols-outlined text-[22px]">check_circle</span>
+                  <span className="text-xs sm:text-sm font-bold">{actionFeedback}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActionFeedback(null)}
+                  className="p-1 text-secondary hover:bg-secondary/20 rounded-lg transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+            )}
+
             {/* ======================= التبويب 1: تفاصيل المهمة والمرفقات ======================= */}
             {activeTab === 'details' && (
               <div className="flex flex-col gap-6">
@@ -592,8 +626,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                   </div>
                 )}
 
-                {/* ملاحظة إنجاز الموظفة إن وجدت */}
-                {currentTask.employee_note && (
+                {/* ملاحظة إنجاز الموظفة إن وجدت أو تأكيد الإنجاز */}
+                {currentTask.employee_note ? (
                   <div className="p-4 rounded-2xl bg-secondary-container/20 border border-secondary/30 flex flex-col gap-1.5">
                     <div className="flex items-center gap-2 text-secondary font-bold text-xs">
                       <span className="material-symbols-outlined text-[18px]">verified</span>
@@ -603,7 +637,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                       {currentTask.employee_note}
                     </p>
                   </div>
-                )}
+                ) : currentTask.status === 'completed' ? (
+                  <div className="p-3.5 rounded-2xl bg-secondary/10 border border-secondary/20 flex items-center gap-2 text-secondary text-xs font-semibold">
+                    <span className="material-symbols-outlined text-[18px]">verified</span>
+                    <span>تم تأكيد اكتمال وإنجاز هذه المهمة بنجاح.</span>
+                  </div>
+                ) : null}
 
                 {/* قسم المرفقات والصور */}
                 <div className="flex flex-col gap-3 pt-4 border-t border-surface-variant/30">
@@ -915,6 +954,18 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                 </>
               )}
 
+              {/* زر اعتماد الإنجاز للمسؤولة */}
+              {isManager && currentTask.status !== 'completed' && (
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange('completed')}
+                  className="px-4 py-2 bg-secondary hover:bg-secondary/90 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">verified</span>
+                  <span>اعتماد وتأكيد الإنجاز</span>
+                </button>
+              )}
+
               {currentTask.status === 'completed' && (
                 <div className="flex items-center gap-1.5 text-xs font-bold text-secondary">
                   <span className="material-symbols-outlined text-[20px]">verified</span>
@@ -970,6 +1021,15 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
               <div className="p-3 rounded-2xl bg-error-container/40 text-on-error-container text-xs flex items-center gap-2 border border-error/20">
                 <span className="material-symbols-outlined text-[18px] text-error flex-shrink-0">error</span>
                 <span>{completionError}</span>
+              </div>
+            )}
+
+            {completionSuccess && (
+              <div className="p-3.5 rounded-2xl bg-secondary/15 text-secondary text-xs flex items-center gap-2 border border-secondary/30 animate-in fade-in">
+                <span className="material-symbols-outlined text-[20px] text-secondary flex-shrink-0">
+                  check_circle
+                </span>
+                <span className="font-bold">تم تأكيد إنجاز المهمة وإرسال الإثبات بنجاح! جاري التحديث...</span>
               </div>
             )}
 
@@ -1035,7 +1095,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsCompletionModalOpen(false)}
-                disabled={completingTask}
+                disabled={completingTask || completionSuccess}
                 className="px-4 py-2 rounded-xl text-xs font-medium text-outline hover:bg-surface-container disabled:opacity-50"
               >
                 إلغاء
@@ -1043,13 +1103,27 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
               <button
                 type="button"
                 onClick={handleConfirmCompletion}
-                disabled={completingTask}
-                className="px-5 py-2.5 bg-secondary hover:bg-secondary/90 text-white rounded-xl text-xs font-bold shadow-sm transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                disabled={completingTask || completionSuccess}
+                className={`px-5 py-2.5 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer ${
+                  completionSuccess
+                    ? 'bg-secondary text-white'
+                    : 'bg-secondary hover:bg-secondary/90 text-white disabled:opacity-50'
+                }`}
               >
-                {completingTask && (
+                {completingTask ? (
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : completionSuccess ? (
+                  <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                ) : (
+                  <span className="material-symbols-outlined text-[18px]">verified</span>
                 )}
-                <span>{completingTask ? 'جاري الحفظ والإرسال...' : 'تأكيد الإنجاز'}</span>
+                <span>
+                  {completingTask
+                    ? 'جاري حفظ وتأكيد الإنجاز...'
+                    : completionSuccess
+                    ? 'تم الإنجاز بنجاح!'
+                    : 'تأكيد الإنجاز'}
+                </span>
               </button>
             </div>
           </div>

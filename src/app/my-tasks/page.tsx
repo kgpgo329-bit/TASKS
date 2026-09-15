@@ -490,8 +490,12 @@ export default function MyTasksPage() {
             setDetailsTask(null);
           }}
           task={detailsTask}
-          onTaskUpdated={() => {
-            fetchMyTasks();
+          onTaskUpdated={(updatedTask) => {
+            if (updatedTask) {
+              setDetailsTask(updatedTask);
+              setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+            }
+            fetchMyTasks(true);
           }}
         />
 

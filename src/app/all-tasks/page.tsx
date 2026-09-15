@@ -381,8 +381,12 @@ export default function AllTasksPage() {
           }}
           task={detailsTask}
           employeesList={employees}
-          onTaskUpdated={() => {
-            fetchAllData();
+          onTaskUpdated={(updatedTask) => {
+            if (updatedTask) {
+              setDetailsTask(updatedTask);
+              setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+            }
+            fetchAllData(true);
           }}
           onEditTask={(task) => {
             setEditingTask(task);

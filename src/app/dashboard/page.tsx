@@ -461,8 +461,12 @@ export default function DashboardPage() {
           }}
           task={detailsTask}
           employeesList={employees}
-          onTaskUpdated={() => {
-            fetchDashboardData();
+          onTaskUpdated={(updatedTask) => {
+            if (updatedTask) {
+              setDetailsTask(updatedTask);
+              setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+            }
+            fetchDashboardData(true);
           }}
           onEditTask={(task) => {
             setSelectedTask(task);

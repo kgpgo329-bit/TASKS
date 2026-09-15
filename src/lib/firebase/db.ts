@@ -14,6 +14,7 @@ import {
   arrayUnion,
   limit,
   writeBatch,
+  FieldValue,
 } from 'firebase/firestore';
 import { db } from './config';
 import {
@@ -36,22 +37,41 @@ export function withTimeout<T>(
 ): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) =>
+    new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error(errorMessage)), ms)
     ),
   ]);
 }
 
 /**
+ * فحص ما إذا كانت القيمة كائن مرسل خاص بـ Firestore مثل FieldValue (arrayUnion, deleteField, serverTimestamp)
+ */
+export function isFieldValue(val: any): boolean {
+  if (!val || typeof val !== 'object') return false;
+  return (
+    val instanceof FieldValue ||
+    '_methodName' in val ||
+    '_delegate' in val ||
+    (val.constructor && typeof val.constructor.name === 'string' && val.constructor.name.includes('FieldValue'))
+  );
+}
+
+/**
  * تنظيف أي قيم غير معرفة (undefined) قبل إرسالها لـ Firestore لمنع أخطاء الحفظ
+ * مع الحفاظ الكامل على كائنات FieldValue مثل arrayUnion
  */
 export function sanitizeFirestorePayload<T extends Record<string, any>>(obj: T): Record<string, any> {
+  if (isFieldValue(obj)) return obj;
   const clean: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (value !== undefined) {
-      if (Array.isArray(value)) {
+      if (isFieldValue(value)) {
+        clean[key] = value;
+      } else if (Array.isArray(value)) {
         clean[key] = value.map((item) =>
-          typeof item === 'object' && item !== null ? sanitizeFirestorePayload(item) : item
+          typeof item === 'object' && item !== null && !isFieldValue(item)
+            ? sanitizeFirestorePayload(item)
+            : item
         );
       } else if (typeof value === 'object' && value !== null && !(value instanceof Date)) {
         clean[key] = sanitizeFirestorePayload(value);
@@ -485,18 +505,50 @@ export async function updateTaskStatusWithProof(
   }
 
   if (options?.newAttachments && options.newAttachments.length > 0) {
-    updatePayload.attachments = arrayUnion(
-      ...options.newAttachments.map((att) => sanitizeFirestorePayload(att as any))
+    const sanitizedAttachments = options.newAttachments.map((att) =>
+      sanitizeFirestorePayload(att as any)
     );
+    updatePayload.attachments = arrayUnion(...sanitizedAttachments);
   }
 
   const cleanPayload = sanitizeFirestorePayload(updatePayload);
 
-  await withTimeout(
-    updateDoc(docRef, cleanPayload),
-    10000,
-    'تعذر تحديث حالة المهمة: استغرقت قاعدة البيانات وقتاً أطول من المتوقع.'
-  );
+  try {
+    await withTimeout(
+      updateDoc(docRef, cleanPayload),
+      10000,
+      'تعذر تحديث حالة المهمة: استغرقت قاعدة البيانات وقتاً أطول من المتوقع.'
+    );
+  } catch (firstErr: any) {
+    console.warn('Direct updateDoc with arrayUnion failed, attempting fallback merge:', firstErr);
+    // كخيار احتياطي فائق الأمان في حال كان حقل attachments غير موجود أو به مشكلة توافق مع arrayUnion
+    if (options?.newAttachments && options.newAttachments.length > 0) {
+      try {
+        const snap = await getDoc(docRef);
+        const existingAtts =
+          snap.exists() && Array.isArray(snap.data()?.attachments)
+            ? snap.data().attachments
+            : [];
+        const sanitizedAttachments = options.newAttachments.map((att) =>
+          sanitizeFirestorePayload(att as any)
+        );
+        const fallbackPayload = sanitizeFirestorePayload({
+          ...updatePayload,
+          attachments: [...existingAtts, ...sanitizedAttachments],
+        });
+        await withTimeout(
+          updateDoc(docRef, fallbackPayload),
+          10000,
+          'تعذر تحديث حالة المهمة في المحاولة الاحتياطية.'
+        );
+      } catch (fallbackErr) {
+        throw firstErr;
+      }
+    } else {
+      throw firstErr;
+    }
+  }
+
   invalidateCache();
 
   const statusName = TASK_STATUS_LABELS[newStatus] || newStatus;

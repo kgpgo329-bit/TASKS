@@ -52,6 +52,43 @@ export function validateFile(file: File): { valid: boolean; error?: string } {
 }
 
 /**
+ * ضغط الصور قبل تحويلها إلى Base64 لضمان عدم تجاوز حد مستند Firestore (1 ميغابايت)
+ */
+export function compressImageToDataUrl(file: File, maxWidth = 1200, quality = 0.75): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') {
+      return fileToDataUrl(file).then(resolve).catch(reject);
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(e.target?.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
  * تحويل الملف إلى رابط بيانات Base64 محلي كحل احتياطي سريع ومضمون 100% في حال بطء أو توقف التخزين السحابي
  */
 export function fileToDataUrl(file: File): Promise<string> {
@@ -144,7 +181,8 @@ export async function uploadTaskFile(
     // في حال تعذر التخزين السحابي والملف 2 ميغابايت أو أقل يتم تحويله فوراً لبيانات مدمجة لضمان إرسال المهمة دون أي تعليق
     if (file.size <= 2 * 1024 * 1024 && typeof window !== 'undefined') {
       console.warn('Firebase Storage unavailable or timed out, using embedded fallback:', err);
-      const dataUrl = await fileToDataUrl(file);
+      const isImg = file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name);
+      const dataUrl = isImg ? await compressImageToDataUrl(file) : await fileToDataUrl(file);
       if (onProgress) onProgress(100);
       return {
         id: uniquePrefix,
