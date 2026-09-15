@@ -39,7 +39,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('mahamee_cached_profile');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && (parsed.name === 'مديرة' || parsed.name === 'مديره')) {
+            parsed.name = 'مشرف النظام';
+          }
+          return parsed;
+        }
       } catch {}
     }
     return null;
@@ -67,6 +73,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (saved) {
             const parsed = JSON.parse(saved);
             if (parsed && (parsed.id === uid || parsed.email)) {
+              if (parsed.name === 'مديرة' || parsed.name === 'مديره') {
+                parsed.name = 'مشرف النظام';
+              }
               return { profile: parsed };
             }
           }

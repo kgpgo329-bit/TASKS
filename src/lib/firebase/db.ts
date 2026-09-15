@@ -100,9 +100,11 @@ export async function getProfile(userId: string): Promise<Profile | null> {
       const userSnap = await getDoc(userRef);
       if (userSnap.exists()) {
         const data = userSnap.data();
+        let name = data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم';
+        if (name === 'مديرة' || name === 'مديره') name = 'مشرف النظام';
         return {
           id: userId,
-          name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
+          name,
           email: data.email || '',
           role: data.role as UserRole,
           is_active: data.is_active !== undefined ? data.is_active : (data.isActive !== undefined ? data.isActive : true),
@@ -116,9 +118,11 @@ export async function getProfile(userId: string): Promise<Profile | null> {
       const profSnap = await getDoc(profRef);
       if (profSnap.exists()) {
         const data = profSnap.data();
+        let name = data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم';
+        if (name === 'مديرة' || name === 'مديره') name = 'مشرف النظام';
         return {
           id: userId,
-          name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
+          name,
           email: data.email || '',
           role: data.role as UserRole,
           is_active: data.is_active !== undefined ? data.is_active : (data.isActive !== undefined ? data.isActive : true),
@@ -165,39 +169,51 @@ export async function getAllProfiles(forceRefresh = false): Promise<Profile[]> {
 
   return withTimeout(
     (async () => {
-      const usersCol = collection(db, 'users');
-      const userSnap = await getDocs(usersCol);
-      let list: Profile[] = [];
-      if (!userSnap.empty) {
-        list = userSnap.docs.map((d) => {
+      const [userSnap, profSnap] = await Promise.all([
+        getDocs(collection(db, 'users')).catch(() => null),
+        getDocs(collection(db, 'profiles')).catch(() => null),
+      ]);
+
+      const map = new Map<string, Profile>();
+
+      // دمج بيانات profiles أولاً
+      if (profSnap && !profSnap.empty) {
+        profSnap.docs.forEach((d) => {
           const data = d.data();
-          return {
+          let name = data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم';
+          if (name === 'مديرة' || name === 'مديره') name = 'مشرف النظام';
+          map.set(d.id, {
             id: d.id,
-            name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
-            email: data.email || '',
-            role: data.role as UserRole,
-            is_active: data.is_active !== undefined ? data.is_active : (data.isActive !== undefined ? data.isActive : true),
-            created_at: data.created_at || data.createdAt || new Date().toISOString(),
-            updated_at: data.updated_at || data.updatedAt || new Date().toISOString(),
-          };
-        });
-      } else {
-        const profCol = collection(db, 'profiles');
-        const profSnap = await getDocs(profCol);
-        list = profSnap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            name: data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم',
+            name,
             email: data.email || '',
             role: data.role as UserRole,
             is_active: data.is_active !== undefined ? data.is_active : true,
-            created_at: data.created_at || new Date().toISOString(),
-            updated_at: data.updated_at || new Date().toISOString(),
-          };
+            created_at: data.created_at || data.createdAt || new Date().toISOString(),
+            updated_at: data.updated_at || data.updatedAt || new Date().toISOString(),
+          });
         });
       }
 
+      // دمج وتفضيل بيانات users الأكثر حداثة
+      if (userSnap && !userSnap.empty) {
+        userSnap.docs.forEach((d) => {
+          const data = d.data();
+          let name = data.name || data.displayName || data.email?.split('@')[0] || 'مستخدم';
+          if (name === 'مديرة' || name === 'مديره') name = 'مشرف النظام';
+          const existing = map.get(d.id);
+          map.set(d.id, {
+            id: d.id,
+            name: (name !== 'مستخدم' || !existing?.name) ? name : existing.name,
+            email: data.email || existing?.email || '',
+            role: (data.role || existing?.role || 'employee') as UserRole,
+            is_active: data.is_active !== undefined ? data.is_active : (data.isActive !== undefined ? data.isActive : (existing?.is_active ?? true)),
+            created_at: data.created_at || data.createdAt || existing?.created_at || new Date().toISOString(),
+            updated_at: data.updated_at || data.updatedAt || existing?.updated_at || new Date().toISOString(),
+          });
+        });
+      }
+
+      const list = Array.from(map.values());
       _cachedProfiles = { data: list, time: Date.now() };
       return list;
     })(),
