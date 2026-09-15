@@ -88,7 +88,7 @@ export default function AllTasksPage() {
   }) => {
     const currentActor = {
       id: user?.uid || profile?.id || '',
-      name: profile?.name || 'المديرة',
+      name: profile?.name || 'المسؤول',
       role: (profile?.role || 'manager') as UserRole,
     };
 
@@ -222,7 +222,7 @@ export default function AllTasksPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl lg:text-3xl font-bold text-primary">جميع المهام (لوحة المديرة)</h1>
+                <h1 className="text-2xl lg:text-3xl font-bold text-primary">جميع المهام (لوحة المسؤول)</h1>
                 <span className="px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-xs font-semibold">
                   {tasks.length} مهمة إجمالية
                 </span>
@@ -265,7 +265,7 @@ export default function AllTasksPage() {
             </div>
           </div>
 
-          {/* شريط الفلاتر المتقدم الخاص بالمديرة */}
+          {/* شريط الفلاتر المتقدم الخاص بالمسؤول */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-surface-container-lowest p-4 rounded-2xl border border-surface-variant/40 shadow-sm">
             {/* فلتر اختيار الموظفة */}
             <div>
@@ -278,7 +278,7 @@ export default function AllTasksPage() {
                 <option value="all">كافة الموظفات ({employees.length})</option>
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.role === 'manager' ? 'مديرة' : 'موظفة'})
+                    {emp.name} ({emp.role === 'manager' ? 'مسؤول' : 'موظفة'})
                   </option>
                 ))}
               </select>
@@ -352,7 +352,7 @@ export default function AllTasksPage() {
                 <TaskCard
                   key={task.id}
                   task={task}
-                  showAssignee={true} // دائماً يظهر اسم الموظفة للمديرة
+                  showAssignee={true} // دائماً يظهر اسم الموظفة للمسؤول
                   onStatusChange={handleStatusChange}
                   onEdit={(t) => {
                     setEditingTask(t);

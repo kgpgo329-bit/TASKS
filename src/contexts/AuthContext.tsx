@@ -266,7 +266,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const roleStr = (profile?.role || '').toString().toLowerCase().trim();
   const isManager = Boolean(
     profile &&
-    (roleStr === 'manager' || roleStr === 'admin' || roleStr.includes('مدير'))
+    (roleStr === 'manager' || roleStr === 'admin' || roleStr.includes('مدير') || roleStr.includes('مسؤول'))
   );
   const isEmployee = Boolean(
     profile &&

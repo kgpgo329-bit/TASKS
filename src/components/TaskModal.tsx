@@ -174,7 +174,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             />
           </div>
 
-          {/* تعيين الموظفة (خاص بالمديرة فقط) */}
+          {/* تعيين الموظفة (خاص بالمسؤول فقط) */}
           {isManager && employeesList.length > 0 && (
             <div>
               <label className="block text-xs font-bold text-primary mb-1">
@@ -187,7 +187,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               >
                 {employeesList.map((emp) => (
                   <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.email}) - {emp.role === 'manager' ? 'مديرة' : 'موظفة'}
+                    {emp.name} ({emp.email}) - {emp.role === 'manager' ? 'مسؤول' : 'موظفة'}
                   </option>
                 ))}
               </select>

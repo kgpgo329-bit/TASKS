@@ -143,7 +143,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose, myTas
                     : 'bg-surface-container text-on-surface-variant'
                 }`}
               >
-                {isManager ? 'مديرة النظام' : 'موظفة'}
+                {isManager ? 'مسؤول النظام' : 'موظفة'}
               </span>
             </div>
           </div>

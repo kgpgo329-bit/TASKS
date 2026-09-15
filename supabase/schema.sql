@@ -24,7 +24,7 @@ create index if not exists idx_profiles_role on public.profiles(role);
 create index if not exists idx_profiles_is_active on public.profiles(is_active);
 
 -- ------------------------------------------------------------------------------
--- 2. دالة التحقق من دور المديرة (is_manager) لتفادي التكرار اللانهائي في RLS
+-- 2. دالة التحقق من دور المسؤول (is_manager) لتفادي التكرار اللانهائي في RLS
 -- ------------------------------------------------------------------------------
 create or replace function public.is_manager()
 returns boolean
@@ -49,7 +49,7 @@ $$;
 -- ------------------------------------------------------------------------------
 alter table public.profiles enable row level security;
 
--- سياسة القراءة: الموظفة تقرأ بياناتها فقط، والمديرة تقرأ بيانات الجميع
+-- سياسة القراءة: الموظفة تقرأ بياناتها فقط، والمسؤول يقرأ بيانات الجميع
 create policy "profiles_select_policy"
   on public.profiles for select
   using (
@@ -57,7 +57,7 @@ create policy "profiles_select_policy"
     or public.is_manager()
   );
 
--- سياسة التحديث: الموظفة تحدث اسمها فقط، والمديرة تحدث أي حساب
+-- سياسة التحديث: الموظفة تحدث اسمها فقط، والمسؤول يحدث أي حساب
 create policy "profiles_update_policy"
   on public.profiles for update
   using (
@@ -65,7 +65,7 @@ create policy "profiles_update_policy"
     or public.is_manager()
   );
 
--- سياسة الإدراج: للمديرة أو خدمة النظام
+-- سياسة الإدراج: للمسؤول أو خدمة النظام
 create policy "profiles_insert_policy"
   on public.profiles for insert
   with check (
@@ -73,7 +73,7 @@ create policy "profiles_insert_policy"
     or public.is_manager()
   );
 
--- سياسة الحذف: للمديرة فقط
+-- سياسة الحذف: للمسؤول فقط
 create policy "profiles_delete_policy"
   on public.profiles for delete
   using (
@@ -144,7 +144,7 @@ alter table public.tasks enable row level security;
 
 -- سياسة الاستعراض (SELECT):
 -- الموظفة لا ترى إلا مهامها الخاصة فقط (user_id = auth.uid())
--- المديرة ترى مهام جميع الموظفات
+-- المسؤول يرى مهام جميع الموظفات
 create policy "tasks_select_policy"
   on public.tasks for select
   using (
@@ -154,7 +154,7 @@ create policy "tasks_select_policy"
 
 -- سياسة الإضافة (INSERT):
 -- الموظفة تضيف مهاماً لنفسها فقط (user_id = auth.uid())
--- المديرة يمكنها إضافة مهمة لنفسها أو تعيينها لأي موظفة
+-- المسؤول يمكنه إضافة مهمة لنفسه أو تعيينها لأي موظفة
 create policy "tasks_insert_policy"
   on public.tasks for insert
   with check (
@@ -164,7 +164,7 @@ create policy "tasks_insert_policy"
 
 -- سياسة التعديل (UPDATE):
 -- الموظفة تعدل مهامها الخاصة فقط
--- المديرة يمكنها تعديل مهام أي موظفة
+-- المسؤول يمكنه تعديل مهام أي موظفة
 create policy "tasks_update_policy"
   on public.tasks for update
   using (
@@ -174,7 +174,7 @@ create policy "tasks_update_policy"
 
 -- سياسة الحذف (DELETE):
 -- الموظفة تحذف مهامها الخاصة فقط
--- المديرة يمكنها حذف أي مهمة
+-- المسؤول يمكنه حذف أي مهمة
 create policy "tasks_delete_policy"
   on public.tasks for delete
   using (
@@ -206,10 +206,10 @@ create trigger set_profiles_updated_at
   for each row execute function public.set_updated_at();
 
 -- ------------------------------------------------------------------------------
--- 8. طريقة إنشاء حساب المديرة الأولى (Super Admin Manager)
+-- 8. طريقة إنشاء حساب المسؤول الأول (Super Admin Manager)
 -- ------------------------------------------------------------------------------
 -- يمكنك إما إنشاء مستخدم من خلال لوحة Supabase Authentication أو تنفيذ أمر مباشر
--- ثم تعيين دوره كمديرة بالاستعلام التالي (قم باستبدال البريد ببريدك):
+-- ثم تعيين دوره كمسؤول بالاستعلام التالي (قم باستبدال البريد ببريدك):
 /*
 update public.profiles
 set role = 'manager', is_active = true

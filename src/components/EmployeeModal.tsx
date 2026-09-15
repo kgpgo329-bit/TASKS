@@ -198,7 +198,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                 }`}
               >
                 <span className="material-symbols-outlined text-[16px]">shield_person</span>
-                <span>مديرة</span>
+                <span>مسؤول</span>
               </button>
             </div>
           </div>

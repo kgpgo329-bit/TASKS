@@ -192,7 +192,7 @@ export default function EmployeesPage() {
                 </span>
               </div>
               <p className="text-xs lg:text-sm text-on-surface-variant">
-                لوحة حصرية للمديرة لإضافة، تعديل، تعطيل، وحذف حسابات الموظفات ومتابعة نشاطهن.
+                لوحة حصرية للمسؤول لإضافة، تعديل، تعطيل، وحذف حسابات الموظفات ومتابعة نشاطهن.
               </p>
             </div>
 
@@ -322,7 +322,7 @@ export default function EmployeesPage() {
                               <span className="material-symbols-outlined text-[14px]">
                                 {emp.role === 'manager' ? 'shield_person' : 'badge'}
                               </span>
-                              <span>{emp.role === 'manager' ? 'مديرة' : 'موظفة'}</span>
+                              <span>{emp.role === 'manager' ? 'مسؤول' : 'موظفة'}</span>
                             </span>
                           </td>
 

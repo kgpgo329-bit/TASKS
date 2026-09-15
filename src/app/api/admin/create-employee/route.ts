@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'غير مصرح: يرجى تسجيل الدخول أولاً كمديرة للنظام' },
+        { error: 'غير مصرح: يرجى تسجيل الدخول أولاً كمسؤول للنظام' },
         { status: 401 }
       );
     }
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. التحقق من صلاحيات المديرة في Firestore
+    // 3. التحقق من صلاحيات المسؤول في Firestore
     let isManager = false;
     const userDocRef = doc(db, 'users', callerUid);
     const userDocSnap = await getDoc(userDocRef);
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     if (!isManager) {
       return NextResponse.json(
-        { error: 'صلاحية مرفوضة: إضافة الموظفين مقتصرة حصرياً على المديرة' },
+        { error: 'صلاحية مرفوضة: إضافة الموظفين مقتصرة حصرياً على المسؤول' },
         { status: 403 }
       );
     }

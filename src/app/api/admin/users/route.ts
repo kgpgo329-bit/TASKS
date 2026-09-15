@@ -180,9 +180,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'معرّف الموظفة مطلوب' }, { status: 400 });
     }
 
-    // منع المديرة من حذف حسابها الشخصي عن طريق الخطأ
+    // منع المسؤول من حذف حسابه الشخصي عن طريق الخطأ
     if (authResult.user && id === authResult.user.id) {
-      return NextResponse.json({ error: 'لا يمكنكِ حذف حسابكِ الشخصي' }, { status: 400 });
+      return NextResponse.json({ error: 'لا يمكنك حذف حسابك الشخصي' }, { status: 400 });
     }
 
     // حذف المستخدم من Supabase Auth (سيتم الحذف التلقائي من profiles و tasks بفضل CASCADE)

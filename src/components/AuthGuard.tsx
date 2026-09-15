@@ -18,7 +18,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireRole }) =
 
   const userRole = (profile?.role || '').toString().toLowerCase().trim();
   const hasManagerAccess = Boolean(
-    isManager || userRole === 'manager' || userRole === 'admin' || userRole.includes('مدير')
+    isManager || userRole === 'manager' || userRole === 'admin' || userRole.includes('مدير') || userRole.includes('مسؤول')
   );
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireRole }) =
         // انتهى التحميل ولم يتم العثور على مستند المستخدم
         router.replace('/login');
       } else if (requireRole === 'manager' && !hasManagerAccess) {
-        // إذا حاولت موظفة دخول صفحة مخصصة للمديرة
+        // إذا حاولت موظفة دخول صفحة مخصصة للمسؤول
         router.replace('/my-tasks');
       }
     }
@@ -59,7 +59,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireRole }) =
           <span className="material-symbols-outlined text-error text-5xl">lock</span>
           <h2 className="text-xl font-bold text-primary">صفحة مخصصة لإدارة النظام</h2>
           <p className="text-on-surface-variant text-sm">
-            ليس لديكِ صلاحية للوصول إلى هذه الصفحة، حيث أنها متاحة للمديرة فقط.
+            ليس لديكِ صلاحية للوصول إلى هذه الصفحة، حيث أنها متاحة للمسؤول فقط.
           </p>
           <button
             onClick={() => router.replace('/my-tasks')}

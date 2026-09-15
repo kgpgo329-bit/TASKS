@@ -83,7 +83,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* قائمة الإشعارات اللحظية */}
         <NotificationDropdown onSelectTask={onSelectTask} />
 
-        {/* زر إضافة موظف جديد للمديرة */}
+        {/* زر إضافة موظف جديد للمسؤول */}
         {onOpenAddEmployeeModal && isManager && (
           <button
             type="button"

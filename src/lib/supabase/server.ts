@@ -3,7 +3,7 @@ import { createClient, User } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-role-key';
 
-// عميل الخادم بصلاحيات كاملة للعمليات الإدارية الخاصة بالمديرة فقط
+// عميل الخادم بصلاحيات كاملة للعمليات الإدارية الخاصة بالمسؤول فقط
 export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
   auth: {
     autoRefreshToken: false,
@@ -15,7 +15,7 @@ type VerifyResult =
   | { authorized: false; error: string; user?: undefined; profile?: undefined }
   | { authorized: true; user: User; profile: any; error?: undefined };
 
-// دالة فحص وتوثيق طلبات المديرة القادمة إلى الـ API
+// دالة فحص وتوثيق طلبات المسؤول القادمة إلى الـ API
 export async function verifyManagerSession(authHeader: string | null): Promise<VerifyResult> {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return { authorized: false, error: 'غير مصرح بالدخول، يرجى تسجيل الدخول أولاً' };
@@ -45,7 +45,7 @@ export async function verifyManagerSession(authHeader: string | null): Promise<V
   }
 
   if (profile.role !== 'manager') {
-    return { authorized: false, error: 'عذراً، هذه العملية مخصصة للمديرة فقط' };
+    return { authorized: false, error: 'عذراً، هذه العملية مخصصة للمسؤول فقط' };
   }
 
   return { authorized: true, user, profile };

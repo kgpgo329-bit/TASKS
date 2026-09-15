@@ -144,7 +144,7 @@ export default function DashboardPage() {
                   <span>لوحة المتابعة الإدارية والدعوية</span>
                 </div>
                 <h1 className="text-xl lg:text-3xl font-bold tracking-tight">
-                  مرحباً {profile?.name || 'المديرة'} 👋، أسبوع حافل بالإنجاز والتميز في برامج
+                  مرحباً {profile?.name || 'المسؤول'} 👋، أسبوع حافل بالإنجاز والتميز في برامج
                 </h1>
                 <p className="text-xs lg:text-sm text-primary-fixed-dim/90 flex items-center gap-1">
                   <span className="material-symbols-outlined text-[16px] text-tertiary-fixed">format_quote</span>
@@ -358,7 +358,7 @@ export default function DashboardPage() {
                           <div className="flex flex-col">
                             <span className="font-semibold text-primary">{emp.name}</span>
                             <span className="text-[10px] text-on-surface-variant">
-                              {emp.role === 'manager' ? 'مديرة' : 'موظفة'}
+                              {emp.role === 'manager' ? 'مسؤول' : 'موظفة'}
                             </span>
                           </div>
                         </div>
@@ -406,7 +406,7 @@ export default function DashboardPage() {
           onSave={async (taskData) => {
             const currentActor = {
               id: user?.uid || profile?.id || '',
-              name: profile?.name || 'المديرة',
+              name: profile?.name || 'المسؤول',
               role: (profile?.role || 'manager') as UserRole,
             };
 

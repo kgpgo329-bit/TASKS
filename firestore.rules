@@ -47,21 +47,21 @@ service cloud.firestore {
 
     // قواعد حماية المهام (tasks/{taskId})
     match /tasks/{taskId} {
-      // القراءة: المديرة تقرأ كل المهام، الموظفة تقرأ مهامها المسندة إليها فقط
+      // القراءة: المسؤول يقرأ كل المهام، الموظفة تقرأ مهامها المسندة إليها فقط
       allow read: if request.auth != null && (isManager() || resource.data.user_id == request.auth.uid);
 
-      // الإنشاء: المديرة تنشئ المهام وتكلف الموظفات
+      // الإنشاء: المسؤول ينشئ المهام ويكلف الموظفات
       allow create: if request.auth != null && (isManager() || request.resource.data.user_id == request.auth.uid);
 
       // التعديل:
-      // المديرة تعدل بحرية
+      // المسؤول يعدل بحرية
       // الموظفة تعدل فقط إذا كانت المهمة مسندة لها ولم تغير البيانات الأصلية (تعديل الحالة، المرفقات، ملاحظة الإنجاز)
       allow update: if request.auth != null && (
         isManager() ||
         (isTaskAssignee(resource.data) && employeeKeptOriginalFields(resource.data, request.resource.data))
       );
 
-      // الحذف: محصور تماماً بالمديرة فقط
+      // الحذف: محصور تماماً بالمسؤول فقط
       allow delete: if isManager();
 
       // المحادثات اللحظية داخل المهمة

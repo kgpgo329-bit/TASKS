@@ -179,7 +179,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         </div>
 
-        {/* الجانب الأيسر: قائمة تغيير الحالة السريعة وأزرار التعديل والحذف للمديرة */}
+        {/* الجانب الأيسر: قائمة تغيير الحالة السريعة وأزرار التعديل والحذف للمسؤول */}
         <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {/* محدد الحالة السريع */}
           <select

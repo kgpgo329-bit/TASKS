@@ -51,7 +51,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// دالة مساعدة لإنشاء حساب موظفة جديدة في Firebase Auth بدون تسجيل خروج المديرة الحالية
+// دالة مساعدة لإنشاء حساب موظفة جديدة في Firebase Auth بدون تسجيل خروج المسؤول الحالي
 export async function createEmployeeAuthAccount(email: string, pass: string): Promise<string> {
   const secondaryAppName = `secondary-auth-${Date.now()}`;
   const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
