@@ -1,3 +1,8 @@
+/**
+ * © 2026 Jory Al-Thuwaini — Mahami Platform
+ * منصة مهامي — جميع الحقوق محفوظة
+ */
+
 import './globals.css';
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/contexts/AuthContext';

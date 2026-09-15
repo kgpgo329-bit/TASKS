@@ -1,3 +1,8 @@
+/**
+ * © 2026 Jory Al-Thuwaini — Mahami Platform
+ * منصة مهامي — جميع الحقوق محفوظة
+ */
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -5,6 +10,7 @@ import { AuthGuard } from '@/components/AuthGuard';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { EmployeeModal } from '@/components/EmployeeModal';
+import { Footer } from '@/components/Footer';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllProfiles, getAllTasks, updateProfile, deleteProfile, setProfile } from '@/lib/firebase/db';
 import { Profile, UserRole, Task } from '@/lib/firebase/types';
@@ -401,6 +407,9 @@ export default function EmployeesPage() {
               </div>
             </div>
           )}
+
+          {/* تذييل الصفحة وحقوق الملكية */}
+          <Footer className="mt-8" />
         </main>
 
         {/* نافذة إضافة / تعديل موظفة */}

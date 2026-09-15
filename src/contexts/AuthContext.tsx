@@ -1,3 +1,8 @@
+/**
+ * © 2026 Jory Al-Thuwaini — Mahami Platform
+ * منصة مهامي — جميع الحقوق محفوظة
+ */
+
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';

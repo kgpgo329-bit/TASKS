@@ -1,3 +1,8 @@
+/**
+ * © 2026 Jory Al-Thuwaini — Mahami Platform
+ * منصة مهامي — جميع الحقوق محفوظة
+ */
+
 import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, initializeFirestore } from 'firebase/firestore';

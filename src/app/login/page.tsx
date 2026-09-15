@@ -1,9 +1,15 @@
+/**
+ * © 2026 Jory Al-Thuwaini — Mahami Platform
+ * منصة مهامي — جميع الحقوق محفوظة
+ */
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Logo } from '@/components/Logo';
+import { Footer } from '@/components/Footer';
 import { isFirebaseConfigured } from '@/lib/firebase/config';
 
 export default function LoginPage() {
@@ -170,6 +176,9 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+
+      {/* تذييل وحقوق الملكية */}
+      <Footer className="max-w-md mt-6 border-t-0" />
     </div>
   );
 }

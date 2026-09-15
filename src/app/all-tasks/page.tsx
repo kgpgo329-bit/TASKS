@@ -1,3 +1,8 @@
+/**
+ * © 2026 Jory Al-Thuwaini — Mahami Platform
+ * منصة مهامي — جميع الحقوق محفوظة
+ */
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -7,6 +12,7 @@ import { Header } from '@/components/Header';
 import { TaskCard } from '@/components/TaskCard';
 import { TaskModal } from '@/components/TaskModal';
 import { TaskDetailsModal } from '@/components/TaskDetailsModal';
+import { Footer } from '@/components/Footer';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllTasks, getAllProfiles, updateTask, createTask, deleteTask, getTask } from '@/lib/firebase/db';
 import { uploadTaskFile } from '@/lib/firebase/storage';
@@ -361,6 +367,9 @@ export default function AllTasksPage() {
               ))}
             </div>
           )}
+
+          {/* تذييل الصفحة وحقوق الملكية */}
+          <Footer className="mt-8" />
         </main>
 
         <TaskModal

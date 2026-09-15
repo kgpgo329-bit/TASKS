@@ -1,3 +1,8 @@
+/**
+ * © 2026 Jory Al-Thuwaini — Mahami Platform
+ * منصة مهامي — جميع الحقوق محفوظة
+ */
+
 'use client';
 
 import React from 'react';
@@ -151,6 +156,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose, myTas
           <span className="material-symbols-outlined text-[18px]">logout</span>
           <span>تسجيل الخروج</span>
         </button>
+
+        <div className="pt-2 text-center border-t border-surface-variant/20">
+          <p className="text-[10px] text-outline leading-relaxed">
+            © 2026 منصة مهامي — تطوير <span className="text-primary font-bold">جوري الثويني</span>
+          </p>
+        </div>
       </div>
     </div>
   );
