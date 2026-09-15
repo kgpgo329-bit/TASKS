@@ -11,7 +11,7 @@ service cloud.firestore {
             : 'none');
     }
 
-    // دالة مساعدة للتحقق مما إذا كان المستخدم مديراً
+    // دالة مساعدة للتحقق مما إذا كان المستخدم مسؤولاً
     function isManager() {
       return request.auth != null && getUserRole() == 'manager';
     }
