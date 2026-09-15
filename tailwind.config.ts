@@ -74,6 +74,15 @@ const config: Config = {
       fontFamily: {
         sans: ["'IBM Plex Sans Arabic'", "sans-serif"],
       },
+      zIndex: {
+        '50': '50',
+        '60': '60',
+        '70': '70',
+        '80': '80',
+        '90': '90',
+        '100': '100',
+        '110': '110',
+      },
     },
   },
   plugins: [],

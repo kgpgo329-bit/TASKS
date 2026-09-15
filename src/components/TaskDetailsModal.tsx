@@ -67,6 +67,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   const [completionNote, setCompletionNote] = useState('');
   const [completionFiles, setCompletionFiles] = useState<File[]>([]);
   const [completingTask, setCompletingTask] = useState(false);
+  const [completionError, setCompletionError] = useState('');
 
   // معاينة الصورة المكبرة (Lightbox)
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -81,6 +82,8 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
     setActiveTab('details');
     setUploadError('');
     setUploadSuccess('');
+    setIsCompletionModalOpen(false);
+    setCompletionError('');
   }, [initialTask, isOpen]);
 
   const taskId = currentTask?.id;
@@ -263,6 +266,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
   // تأكيد إتمام المهمة مع ملاحظة ومرفقات إثبات
   const handleConfirmCompletion = async () => {
     setCompletingTask(true);
+    setCompletionError('');
     try {
       const uploadedAttachments: TaskAttachment[] = [];
 
@@ -301,7 +305,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       setCompletionFiles([]);
     } catch (err: any) {
       console.error('Error completing task:', err);
-      alert('حدث خطأ أثناء حفظ إثبات إنجاز المهمة: ' + err.message);
+      setCompletionError(err.message || 'حدث خطأ أثناء حفظ إثبات إنجاز المهمة');
     } finally {
       setCompletingTask(false);
     }
@@ -932,16 +936,42 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
 
       {/* نافذة إتمام المهمة مع إثبات الموظفة */}
       {isCompletionModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-md p-6 shadow-2xl border border-secondary/30 flex flex-col gap-4">
-            <div className="flex items-center gap-2 text-secondary">
-              <span className="material-symbols-outlined text-[26px]">task_alt</span>
-              <h3 className="text-base font-bold text-primary">إتمام المهمة وإرسال الإثبات</h3>
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
+          style={{ zIndex: 100 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !completingTask) {
+              setIsCompletionModalOpen(false);
+            }
+          }}
+        >
+          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-md p-6 shadow-2xl border border-secondary/30 flex flex-col gap-4 relative z-[101]">
+            <div className="flex items-center justify-between text-secondary">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[26px]">task_alt</span>
+                <h3 className="text-base font-bold text-primary">إتمام المهمة وإرسال الإثبات</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCompletionModalOpen(false)}
+                disabled={completingTask}
+                className="text-on-surface-variant hover:text-on-surface p-1.5 rounded-xl hover:bg-surface-container transition-colors disabled:opacity-50"
+                title="إغلاق"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
             </div>
 
             <p className="text-xs text-on-surface-variant leading-relaxed">
-              يمكنك كتابة ملاحظاتك حول تنفيذ المهمة وإرفاق صور أو تقارير تثبت إتمام العمل بنجاح.
+              يمكنك كتابة ملاحظاتك حول كيفية تنفيذ المهمة وإرفاق صور أو مستندات تثبت إتمام العمل بنجاح.
             </p>
+
+            {completionError && (
+              <div className="p-3 rounded-2xl bg-error-container/40 text-on-error-container text-xs flex items-center gap-2 border border-error/20">
+                <span className="material-symbols-outlined text-[18px] text-error flex-shrink-0">error</span>
+                <span>{completionError}</span>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-bold text-primary mb-1">
@@ -957,8 +987,9 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-primary mb-1">
-                إرفاق صور أو ملف إثبات (اختياري)
+              <label className="block text-xs font-bold text-primary mb-1 flex items-center justify-between">
+                <span>إرفاق صور أو ملف إثبات (اختياري)</span>
+                <span className="text-[10px] text-outline font-normal">(صور، PDF، Word)</span>
               </label>
               <input
                 type="file"
@@ -966,14 +997,36 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp"
                 onChange={(e) => {
                   if (e.target.files) {
-                    setCompletionFiles(Array.from(e.target.files));
+                    const newFiles = Array.from(e.target.files);
+                    setCompletionFiles((prev) => [...prev, ...newFiles]);
                   }
                 }}
-                className="w-full text-xs text-outline file:mr-0 file:ml-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-secondary file:text-white hover:file:bg-secondary/90"
+                className="w-full text-xs text-outline file:mr-0 file:ml-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-secondary file:text-white hover:file:bg-secondary/90 cursor-pointer"
               />
               {completionFiles.length > 0 && (
-                <div className="mt-2 text-[11px] text-secondary font-medium">
-                  تم اختيار {completionFiles.length} ملف للرفع
+                <div className="mt-2.5 flex flex-col gap-1.5 max-h-32 overflow-y-auto">
+                  {completionFiles.map((f, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-2 rounded-xl bg-surface-container-low text-xs border border-surface-variant/30"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="material-symbols-outlined text-[16px] text-secondary">
+                          description
+                        </span>
+                        <span className="font-semibold truncate">{f.name}</span>
+                        <span className="text-[10px] text-outline">({formatFileSize(f.size)})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCompletionFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="p-1 text-outline hover:text-error rounded-lg transition-colors"
+                        title="إزالة"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -983,7 +1036,7 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                 type="button"
                 onClick={() => setIsCompletionModalOpen(false)}
                 disabled={completingTask}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-outline hover:bg-surface-container"
+                className="px-4 py-2 rounded-xl text-xs font-medium text-outline hover:bg-surface-container disabled:opacity-50"
               >
                 إلغاء
               </button>
@@ -991,12 +1044,12 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
                 type="button"
                 onClick={handleConfirmCompletion}
                 disabled={completingTask}
-                className="px-5 py-2 bg-secondary text-white rounded-xl text-xs font-bold shadow-sm hover:bg-secondary/90 transition-all flex items-center gap-1.5"
+                className="px-5 py-2.5 bg-secondary hover:bg-secondary/90 text-white rounded-xl text-xs font-bold shadow-sm transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
               >
                 {completingTask && (
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 )}
-                <span>تأكيد الإنجاز</span>
+                <span>{completingTask ? 'جاري الحفظ والإرسال...' : 'تأكيد الإنجاز'}</span>
               </button>
             </div>
           </div>
@@ -1006,10 +1059,11 @@ export const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       {/* معاينة الصورة بالحجم الكامل (Lightbox) */}
       {previewImage && (
         <div
-          className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in"
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in"
+          style={{ zIndex: 110 }}
           onClick={() => setPreviewImage(null)}
         >
-          <div className="relative max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl">
+          <div className="relative max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl z-[111]">
             <button
               type="button"
               onClick={() => setPreviewImage(null)}
